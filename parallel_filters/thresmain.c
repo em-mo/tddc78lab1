@@ -10,6 +10,13 @@ void calcDispls(int *src, int xsize, int ysize, int *displacements, int *sendCou
 
 int main (int argc, char ** argv) {
 
+  int error = 0;
+  int* displacements;
+  int* sendCounts;
+  pixel* workData;
+  MPI_Datatype pixelType;
+  int workDataSize;
+
   /* MPI INIT*/
   int ierr = MPI_Init(&argc, &argv);
   int myId, numberProc;
@@ -31,20 +38,36 @@ int main (int argc, char ** argv) {
 
   /* read file */
   if(myId == 0)
-    {
-      if(read_ppm (argv[1], &xsize, &ysize, &colmax, (char *) src) != 0)
-	{
-	  MPI_Finalize();
-	  exit(1);
-	}
+  {
+    if(read_ppm (argv[1], &xsize, &ysize, &colmax, (char *) src) != 0)
+  	{
+  	  MPI_Finalize();
+  	  exit(1);
+  	}
 
-      if (colmax > 255) {
-	fprintf(stderr, "Too large maximum color-component value\n");
-	MPI_Finalize();
-	exit(1);
-      }
+    if (colmax > 255) {
+      error = 1;
     }
-  MPI_Scatter()
+  }
+
+  MPI_Bcast(&error, 1, MPI_Int, 0, MPI_COMM_WORLD);
+
+  if (error == 1) {
+    fprintf(stderr, "Too large maximum color-component value\n");
+    MPI_Finalize();
+    exit(1);
+  }
+  
+  /* Scatter the data */
+  workDataSize = ysize * xsize + 1;
+  displacements = (int*) malloc(numberProc * sizeof(int));
+  sendCounts = (int*) malloc(numberProc* sizeof(int));
+  workData = (pixel*) malloc(workDataSize * sizeof(pixel));
+
+  calcDispls(xsize, ysize, numberProc, displacements, sendCounts);
+  constructPixelDataType(pixelDataType);
+
+  MPI_Scatter(src, sendCounts, displacements, pixelType, workData, workDataSize, pixelType, 0, MPI_COMM_WORLD);
 
   printf("Has read the image, calling filter\n");
 
@@ -71,7 +94,7 @@ int main (int argc, char ** argv) {
 }
 
 
-void calcDispls(int *src, int xsize, int ysize, int nunProc, int *displacements, int *sendCounts)
+void calcDispls(int xsize, int ysize, int nunProc, int *displacements, int *sendCounts)
 {
   int currentDisplacement = 0;
   int sendCount;
@@ -90,4 +113,9 @@ void calcDispls(int *src, int xsize, int ysize, int nunProc, int *displacements,
 
       restPixels--;
     }
+}
+
+void constructPixelDataType(MPI_Datatype pixelDataType) 
+{
+  
 }
