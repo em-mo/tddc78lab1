@@ -51,6 +51,8 @@ int main (int argc, char ** argv) {
   }
 
   MPI_Bcast(&error, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&xsize, 1, MPI_INT, 0, MPI_COMM_WORLD);  
+  MPI_Bcast(&ysize, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   if (error == 1) {
     fprintf(stderr, "Too large maximum color-component value\n");
@@ -65,30 +67,31 @@ int main (int argc, char ** argv) {
   /* Scatter the data */
   workDataSize = ysize * xsize / numberProc + 1;
   displacements = (int*) malloc(numberProc * sizeof(int));
-  sendCounts = (int*) malloc(numberProc* sizeof(int));
+  sendCounts = (int*) malloc(numberProc * sizeof(int));
   workData = (pixel*) malloc(workDataSize * sizeof(pixel));
   memset(workData, 0, workDataSize * sizeof(pixel));
   
   calcDispls(xsize, ysize, numberProc, displacements, sendCounts);
-  constructPixelDataType(&pixelType);
+  //  constructPixelDataType(&pixelType);
+  MPI_Type_contiguous(3, MPI_CHAR, &pixelType);
+  MPI_Type_commit(&pixelType);
 
-  MPI_Scatterv(src, sendCounts, displacements, pixelType, workData, workDataSize, pixelType, 0, MPI_COMM_WORLD);
+
+  if(myId == 0)
+    printf("Scatterv, datasize: %d\n", workDataSize);
+
+  MPI_Scatterv(src, sendCounts, displacements, pixelType, workData, sendCounts[myId], pixelType, 0, MPI_COMM_WORLD);
 
   if ( myId ==0 )
     printf("Has scattered the image, calling filter\n");
 
-  thresfilter(workDataSize, workData, numberProc, myId);
+  thresfilter(sendCounts[myId], workData, numberProc, myId, xsize * ysize);
 
-  //  clock_gettime(CLOCK_REALTIME, &etime);
-
-  //  printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
-  //	 1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
-
-  MPI_Gatherv(workData, workDataSize, pixelType, src, sendCounts, displacements, pixelType, 0, MPI_COMM_WORLD);
+  MPI_Gatherv(workData, sendCounts[myId], pixelType, src, sendCounts, displacements, pixelType, 0, MPI_COMM_WORLD);
 
   if(myId == 0){
     etime = MPI_Wtime();
-    printf("Total time: %.2f", etime - stime);
+    printf("Total time: %.6f", etime - stime);
   
     /* write result */
     printf("Writing output file\n");
@@ -109,8 +112,10 @@ void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *send
   int currentDisplacement = 0;
   int sendCount, i, pixels, restPixels;
   pixels = xsize * ysize / numProc;
-  restPixels = xsize * ysize % numProc;
-  
+  restPixels = (xsize * ysize) % numProc;
+  int myId;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myId);  
+
   for (i = 0; i < numProc; i++) 
     {
       displacements[i] = currentDisplacement;
@@ -119,9 +124,14 @@ void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *send
 
       sendCounts[i] = sendCount;
 
-      currentDisplacement += sendCount * sizeof(pixel);
+      currentDisplacement += sendCount;
 
       restPixels--;
+      
+      if(myId == 0){
+	printf("displacement%d: %d\n", i, currentDisplacement);
+      	printf("sendCount%d: %d\n", i, sendCount);
+      }
     }
 }
 

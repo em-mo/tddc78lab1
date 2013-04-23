@@ -1,9 +1,12 @@
 #include "thresfilter.h"
 
-void thresfilter(const int nump, pixel* src, int numberProc, int myId ){
+void thresfilter(const int nump, pixel* src, int numberProc, int myId, int totalPixels){
 #define uint unsigned int 
 
-  uint sum, totalSum, i, psum, nump;
+  uint sum, i, psum;
+  uint totalSum = 0;
+
+  double avg;
 
   for(i = 0, sum = 0; i < nump; i++) {
     sum += (uint)src[i].r + (uint)src[i].g + (uint)src[i].b;
@@ -11,10 +14,11 @@ void thresfilter(const int nump, pixel* src, int numberProc, int myId ){
   
   MPI_Allreduce(&sum, &totalSum, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
   
-  totalSum /= nump;
+  avg = totalSum / totalPixels;
+
   for(i = 0; i < nump; i++) {
     psum = (uint)src[i].r + (uint)src[i].g + (uint)src[i].b;
-    if(totalSum > psum) {
+    if(avg > psum) {
       src[i].r = src[i].g = src[i].b = 0;
     }
     else {

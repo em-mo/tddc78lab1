@@ -13,6 +13,6 @@ typedef struct _pixel {
     unsigned char r,g,b;
 } pixel;
 
-void thresfilter(const int nump, pixel* src, int numberProc, int myId);
+void thresfilter(const int nump, pixel* src, int numberProc, int myId, int totalPixels);
 
 #endif
