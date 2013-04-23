@@ -6,7 +6,8 @@
 #include "ppmio.h"
 #include "thresfilter.h"
 
-void calcDispls(int *src, int xsize, int ysize, int *displacements, int *sendCounts);
+void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *sendCounts);
+void constructPixelDataType(MPI_Datatype* pixelDataType);
 
 int main (int argc, char ** argv) {
 
@@ -69,7 +70,7 @@ int main (int argc, char ** argv) {
   memset(workData, 0, workDataSize * sizeof(pixel));
   
   calcDispls(xsize, ysize, numberProc, displacements, sendCounts);
-  constructPixelDataType(&pixelDataType);
+  constructPixelDataType(&pixelType);
 
   MPI_Scatterv(src, sendCounts, displacements, pixelType, workData, workDataSize, pixelType, 0, MPI_COMM_WORLD);
 
@@ -103,14 +104,14 @@ int main (int argc, char ** argv) {
 }
 
 
-void calcDispls(int xsize, int ysize, int nunProc, int *displacements, int *sendCounts)
+void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *sendCounts)
 {
   int currentDisplacement = 0;
-  int sendCount;
+  int sendCount, i, pixels, restPixels;
   pixels = xsize * ysize / numProc;
   restPixels = xsize * ysize % numProc;
   
-  for (int i = 0; i < numProc; i++) 
+  for (i = 0; i < numProc; i++) 
     {
       displacements[i] = currentDisplacement;
       
