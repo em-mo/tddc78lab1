@@ -50,7 +50,7 @@ int main (int argc, char ** argv) {
     }
   }
 
-  MPI_Bcast(&error, 1, MPI_Int, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&error, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   if (error == 1) {
     fprintf(stderr, "Too large maximum color-component value\n");
@@ -65,7 +65,7 @@ int main (int argc, char ** argv) {
   workData = (pixel*) malloc(workDataSize * sizeof(pixel));
 
   calcDispls(xsize, ysize, numberProc, displacements, sendCounts);
-  constructPixelDataType(pixelDataType);
+  constructPixelDataType(&pixelDataType);
 
   MPI_Scatter(src, sendCounts, displacements, pixelType, workData, workDataSize, pixelType, 0, MPI_COMM_WORLD);
 
@@ -115,7 +115,24 @@ void calcDispls(int xsize, int ysize, int nunProc, int *displacements, int *send
     }
 }
 
-void constructPixelDataType(MPI_Datatype pixelDataType) 
+void constructPixelDataType(MPI_Datatype* pixelDataType) 
 {
-  
+  pixel item;
+
+  int block_lengths [] = {1, 1, 1};
+  MPI_Datatype block_types [] = {MPI_CHAR, MPI_CHAR, MPI_CHAR};
+  MPI_Aint start, displacement[3];
+
+  MPI_Address(&item, &start);
+  MPI_Address(&item.r, &displacement[0]);
+  MPI_Address(&item.g, &displacement[1]);
+  MPI_Address(&item.b, &displacement[2]);
+
+  displacement[0] -= start;
+  displacement[1] -= start;
+  displacement[2] -= start;
+
+  MPI_Type_struct(3, block_lengths, displacement, block_types, pixelDataType);
+
+  MPI_Type_commit(pixelDataType);
 }
