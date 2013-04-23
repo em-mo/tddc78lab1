@@ -26,7 +26,7 @@ int main (int argc, char ** argv) {
   
   int xsize, ysize, colmax;
   pixel src[MAX_PIXELS];
-  struct timespec stime, etime;
+  double stime, etime;
 
   /* Take care of the arguments */
 
@@ -41,8 +41,7 @@ int main (int argc, char ** argv) {
   {
     if(read_ppm (argv[1], &xsize, &ysize, &colmax, (char *) src) != 0)
   	{
-  	  MPI_Finalize();
-  	  exit(1);
+  	  error = 1;
   	}
 
     if (colmax > 255) {
@@ -57,38 +56,48 @@ int main (int argc, char ** argv) {
     MPI_Finalize();
     exit(1);
   }
-  
+
+  //start time measure
+  if(myId == 0)  
+    stime = MPI_Wtime();
+
   /* Scatter the data */
-  workDataSize = ysize * xsize + 1;
+  workDataSize = ysize * xsize / numberProc + 1;
   displacements = (int*) malloc(numberProc * sizeof(int));
   sendCounts = (int*) malloc(numberProc* sizeof(int));
   workData = (pixel*) malloc(workDataSize * sizeof(pixel));
-
+  memset(workData, 0, workDataSize * sizeof(pixel));
+  
   calcDispls(xsize, ysize, numberProc, displacements, sendCounts);
   constructPixelDataType(&pixelDataType);
 
-  MPI_Scatter(src, sendCounts, displacements, pixelType, workData, workDataSize, pixelType, 0, MPI_COMM_WORLD);
+  MPI_Scatterv(src, sendCounts, displacements, pixelType, workData, workDataSize, pixelType, 0, MPI_COMM_WORLD);
 
-  printf("Has read the image, calling filter\n");
+  if ( myId ==0 )
+    printf("Has scattered the image, calling filter\n");
 
-  clock_gettime(CLOCK_REALTIME, &stime);
+  thresfilter(workDataSize, workData, numberProc, myId);
 
-  thresfilter(xsize, ysize, src);
+  //  clock_gettime(CLOCK_REALTIME, &etime);
 
-  clock_gettime(CLOCK_REALTIME, &etime);
+  //  printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
+  //	 1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
 
-  printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
-	 1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
+  MPI_Gatherv(workData, workDataSize, pixelType, src, sendCounts, displacements, pixelType, 0, MPI_COMM_WORLD);
 
-  /* write result */
-  printf("Writing output file\n");
+  if(myId == 0){
+    etime = MPI_Wtime();
+    printf("Total time: %.2f", etime - stime);
+  
+    /* write result */
+    printf("Writing output file\n");
     
-  if(write_ppm (argv[2], xsize, ysize, (char *)src) != 0)
-    {
-      MPI_Finalize();
-      exit(1);
-    }
-
+    if(write_ppm (argv[2], xsize, ysize, (char *)src) != 0)
+      {
+	MPI_Finalize();
+	exit(1);
+      }
+  }
   MPI_Finalize();
   return(0);
 }

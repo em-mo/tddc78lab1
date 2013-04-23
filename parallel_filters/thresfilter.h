@@ -6,6 +6,8 @@
  */
 #ifndef _THRESFILTER_H_
 #define _THRESFILTER_H_
+
+#include <mpi.h>
 /* NOTE: This structure must not be padded! */
 typedef struct _pixel {
     unsigned char r,g,b;

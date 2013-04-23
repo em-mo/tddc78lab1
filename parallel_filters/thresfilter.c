@@ -1,21 +1,20 @@
 #include "thresfilter.h"
 
-void thresfilter(const int xsize, const int ysize, pixel* src){
+void thresfilter(const int nump, pixel* src, int numberProc, int myId ){
 #define uint unsigned int 
 
-  uint sum, i, psum, nump;
-
-  nump = xsize * ysize;
+  uint sum, totalSum, i, psum, nump;
 
   for(i = 0, sum = 0; i < nump; i++) {
     sum += (uint)src[i].r + (uint)src[i].g + (uint)src[i].b;
   }
-
-  sum /= nump;
-
+  
+  MPI_Allreduce(&sum, &totalSum, 1, MPI_UNSIGNED, MPI_SUM, MPI_COMM_WORLD);
+  
+  totalSum /= nump;
   for(i = 0; i < nump; i++) {
     psum = (uint)src[i].r + (uint)src[i].g + (uint)src[i].b;
-    if(sum > psum) {
+    if(totalSum > psum) {
       src[i].r = src[i].g = src[i].b = 0;
     }
     else {
@@ -23,3 +22,4 @@ void thresfilter(const int xsize, const int ysize, pixel* src){
     }
   }
 }
+
