@@ -15,6 +15,7 @@ int main (int argc, char ** argv)
     int radius;
     int xsize, ysize, colmax;
     pixel src[MAX_PIXELS];
+    pixel target[MAX_PIXELS];
     struct timespec stime, etime;
     #define MAX_RAD 1000
 
@@ -22,6 +23,12 @@ int main (int argc, char ** argv)
     /* MPI INIT*/
     int ierr = MPI_Init(&argc, &argv);
     int myId, numberProc;
+    
+    int* displacements;
+    int* sendCounts;
+    MPI_Datatype pixelType;
+
+    double stime, etime;
 
     MPI_Comm_size(MPI_COMM_WORLD, &numberProc);
     MPI_Comm_rank(MPI_COMM_WORLD, &myId);
@@ -59,28 +66,44 @@ int main (int argc, char ** argv)
 
     printf("Has read the image, generating coefficients\n");;
 
-        /* filter */
+    if(myId = 0)
+        stime = MPI_Wtime();
+    
+    /* filter */
     get_gauss_weights(radius, w);
 
     printf("Calling filter\n");
 
-    clock_gettime(CLOCK_REALTIME, &stime);
+    constructPixelDataType(pixelType);
 
-    blurfilter(xsize, ysize, src, radius, w);
+    displacements = (int*) malloc(numberProc * sizeof(int));
+    sendCounts = (int*) malloc(numberProc * sizeof(int));
 
-    clock_gettime(CLOCK_REALTIME, &etime);
+    if(myId == 0)
+        target = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
 
-    printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
-        1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
+    ystart = displacements[myId] / xsize;
+    ystop = ystart + sendCounts[myId] / xsize;
+    blurfilter(xsize, ysize, src, radius, w, ystart, ystop);
 
-    /* write result */
-    printf("Writing output file\n");
+    MPI_Gatherv(&src[displacemts[myId]], sendCounts[myId], pixelType, target, sendCounts, displacements, pixelType, 0, MPI_COMM_WORLD);
 
-    if(write_ppm (argv[3], xsize, ysize, (char *)src) != 0){
-        MPI_Finalize();
-        exit(1);
+    if(myId == 0)
+    {
+        etime = MPI_Wtime();
+        printf("Total time: %.6f", etime - stime);
+
+        printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
+            1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
+
+        /* write result */
+        printf("Writing output file\n");
+
+        if(write_ppm (argv[3], xsize, ysize, (char *)src) != 0){
+            MPI_Finalize();
+            exit(1);
+        }
     }
-
     MPI_Finalize();
     return(0);
 }
