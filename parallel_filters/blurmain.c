@@ -6,9 +6,12 @@
 #include "blurfilter.h"
 #include "gaussw.h"
 
+void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *sendCounts);
+void constructPixelDataType(MPI_Datatype* pixelDataType);
 
-int main (int argc, char ** argv) {
-   int radius;
+int main (int argc, char ** argv) 
+{
+    int radius;
     int xsize, ysize, colmax;
     pixel src[MAX_PIXELS];
     struct timespec stime, etime;
@@ -18,26 +21,28 @@ int main (int argc, char ** argv) {
 
     /* Take care of the arguments */
 
-    if (argc != 4) {
-	fprintf(stderr, "Usage: %s radius infile outfile\n", argv[0]);
-	exit(1);
+    if (argc != 4) 
+    {
+    	fprintf(stderr, "Usage: %s radius infile outfile\n", argv[0]);
+    	exit(1);
     }
     radius = atoi(argv[1]);
     if((radius > MAX_RAD) || (radius < 1)) {
-	fprintf(stderr, "Radius (%d) must be greater than zero and less then %d\n", radius, MAX_RAD);
-	exit(1);
+    	fprintf(stderr, "Radius (%d) must be greater than zero and less then %d\n", radius, MAX_RAD);
+    	exit(1);
     }
 
     /* read file */
     if(read_ppm (argv[2], &xsize, &ysize, &colmax, (char *) src) != 0)
         exit(1);
 
-    if (colmax > 255) {
-	fprintf(stderr, "Too large maximum color-component value\n");
-	exit(1);
+    if (colmax > 255) 
+    {
+    	fprintf(stderr, "Too large maximum color-component value\n");
+    	exit(1);
     }
 
-    printf("Has read the image, generating coefficients\n");
+    printf("Has read the image, generating coefficients\n");;
 
     /* filter */
     get_gauss_weights(radius, w);
@@ -57,8 +62,35 @@ int main (int argc, char ** argv) {
     printf("Writing output file\n");
     
     if(write_ppm (argv[3], xsize, ysize, (char *)src) != 0)
-      exit(1);
+        exit(1);
 
 
     return(0);
+}
+
+void calcDispls(int xsize, int ysize, int numProc, int myId, int *displacements, int *sendCounts)
+{
+    int currentDisplacement = 0;
+    int sendCount, i, rows, restRows;
+    rows = ysize / numProc;
+    restRows = ysize % numProc;
+
+    for (i = 0; i < numProc; i++) 
+    {
+        displacements[i] = currentDisplacement;
+
+        sendCount = restRows > 0 ? rows + 1 : rows;
+        sendCount *= xsize;
+        sendCounts[i] = sendCount;
+
+        currentDisplacement += sendCount;
+
+        restRows--;
+    }
+}
+
+void constructPixelDataType(MPI_Datatype* pixelDataType) 
+{
+    MPI_Type_contiguous(3, MPI_CHAR, &pixelType);
+    MPI_Type_commit(&pixelType);
 }
