@@ -23,12 +23,19 @@ pixel* pix(pixel* image, const int xx, const int yy, const int xsize)
 
 void blurfilter(const int xsize, const int ysize, pixel* src, const int radius, const double *w, int ystart, int ystop)
 {
-  int x,y,x2,y2, wi;
+  int x,y,x2,y2, wi, ystartfirst, ystopfirst;
   double r,g,b,n, wc;
   pixel dst[MAX_PIXELS];
 
+  printf("Ystart: %d  Ystop %d\n", ystart, ystop);
 
-  for (y=ystart; y<ystop; y++) 
+  ystartfirst = ystart - radius;
+  ystopfirst = ystop + radius;
+
+  ystartfirst = (ystartfirst < 0) ? 0 : ystartfirst;
+  ystopfirst = (ystopfirst < 0) ? 0 : ystopfirst;
+
+  for (y=ystartfirst; y<ystopfirst; y++) 
   {
     for (x=0; x<xsize; x++) 
     {

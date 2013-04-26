@@ -66,7 +66,7 @@ int main (int argc, char ** argv)
 
     printf("Has read the image, generating coefficients\n");;
 
-    if(myId = 0)
+    if(myId == 0)
         stime = MPI_Wtime();
     
     /* filter */
@@ -82,8 +82,14 @@ int main (int argc, char ** argv)
     if(myId == 0)
         target = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
 
+    calcDispls(xsize, ysize, numberProc, myId, displacements, sendCounts);
+
     ystart = displacements[myId] / xsize;
     ystop = ystart + sendCounts[myId] / xsize;
+
+    if (myId == numberProc - 1)
+        ystop++;
+
     blurfilter(xsize, ysize, src, radius, w, ystart, ystop);
 
     MPI_Gatherv(&src[displacements[myId]], sendCounts[myId], pixelType, target, sendCounts, displacements, pixelType, 0, MPI_COMM_WORLD);
@@ -96,7 +102,7 @@ int main (int argc, char ** argv)
         /* write result */
         printf("Writing output file\n");
 
-        if(write_ppm (argv[3], xsize, ysize, (char *)src) != 0){
+        if(write_ppm (argv[3], xsize, ysize, (char *)target) != 0){
             MPI_Finalize();
             exit(1);
         }
@@ -105,14 +111,14 @@ int main (int argc, char ** argv)
     return(0);
 }
 
-void calcDispls(int xsize, int ysize, int numProc, int myId, int *displacements, int *sendCounts)
+void calcDispls(int xsize, int ysize, int numberProc, int myId, int *displacements, int *sendCounts)
 {
     int currentDisplacement = 0;
     int sendCount, i, rows, restRows;
-    rows = ysize / numProc;
-    restRows = ysize % numProc;
+    rows = ysize / numberProc;
+    restRows = ysize % numberProc;
 
-    for (i = 0; i < numProc; i++) 
+    for (i = 0; i < numberProc; i++) 
     {
         displacements[i] = currentDisplacement;
 
