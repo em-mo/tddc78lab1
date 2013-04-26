@@ -7,16 +7,16 @@
 #include "blurfilter.h"
 #include "gaussw.h"
 
-void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *sendCounts);
+void calcDispls(int xsize, int ysize, int numProc, int myId, int *displacements, int *sendCounts);
 void constructPixelDataType(MPI_Datatype* pixelDataType);
 
 int main (int argc, char ** argv) 
 {
     int radius;
     int xsize, ysize, colmax;
+    int ystart, ystop;
     pixel src[MAX_PIXELS];
-    pixel target[MAX_PIXELS];
-    struct timespec stime, etime;
+    pixel* target;
     #define MAX_RAD 1000
 
 
@@ -74,7 +74,7 @@ int main (int argc, char ** argv)
 
     printf("Calling filter\n");
 
-    constructPixelDataType(pixelType);
+    constructPixelDataType(&pixelType);
 
     displacements = (int*) malloc(numberProc * sizeof(int));
     sendCounts = (int*) malloc(numberProc * sizeof(int));
@@ -86,15 +86,12 @@ int main (int argc, char ** argv)
     ystop = ystart + sendCounts[myId] / xsize;
     blurfilter(xsize, ysize, src, radius, w, ystart, ystop);
 
-    MPI_Gatherv(&src[displacemts[myId]], sendCounts[myId], pixelType, target, sendCounts, displacements, pixelType, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(&src[displacements[myId]], sendCounts[myId], pixelType, target, sendCounts, displacements, pixelType, 0, MPI_COMM_WORLD);
 
     if(myId == 0)
     {
         etime = MPI_Wtime();
         printf("Total time: %.6f", etime - stime);
-
-        printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
-            1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
 
         /* write result */
         printf("Writing output file\n");
@@ -129,8 +126,8 @@ void calcDispls(int xsize, int ysize, int numProc, int myId, int *displacements,
     }
 }
 
-void constructPixelDataType(MPI_Datatype* pixelDataType) 
+void constructPixelDataType(MPI_Datatype* pixelType) 
 {
-    MPI_Type_contiguous(3, MPI_CHAR, &pixelType);
-    MPI_Type_commit(&pixelType);
+    MPI_Type_contiguous(3, MPI_CHAR, pixelType);
+    MPI_Type_commit(pixelType);
 }
