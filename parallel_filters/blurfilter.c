@@ -27,8 +27,6 @@ void blurfilter(const int xsize, const int ysize, pixel* src, const int radius, 
   double r,g,b,n, wc;
   pixel dst[MAX_PIXELS];
 
-  printf("Ystart: %d  Ystop %d\n", ystart, ystop);
-
   ystartfirst = ystart - radius;
   ystopfirst = ystop + radius;
 
