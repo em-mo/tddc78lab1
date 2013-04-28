@@ -17,6 +17,7 @@ struct thread_work_data{
     pixel *src, *target;
     int ystart, ystop;
     int radius;
+    int myId;
 };
 
 struct thread_shared_data{

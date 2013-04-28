@@ -36,8 +36,6 @@ int main (int argc, char ** argv) {
     numThreads = atoi(argv[1]);
     radius = atoi(argv[2]);
 
-    
-
     if((radius > MAX_RAD) || (radius < 1)) {
 	    fprintf(stderr, "Radius (%d) must be greater than zero and less then %d\n", radius, MAX_RAD);
 	    exit(1);
@@ -54,14 +52,12 @@ int main (int argc, char ** argv) {
 
     memcpy(&target, &src, MAX_PIXELS * sizeof(pixel));
 
-    printf("Has read the image, generating coefficients\n");
 
     /* filter */
     get_gauss_weights(radius, w);
 
-    printf("Calling filter\n");
 
-   // clock_gettime(CLOCK_REALTIME, &stime);
+    clock_gettime(CLOCK_REALTIME, &stime);
 
     displacements = (int*) malloc(numThreads * sizeof(int));
     writeCounts = (int*) malloc(numThreads * sizeof(int));
@@ -85,9 +81,10 @@ int main (int argc, char ** argv) {
 
         work_data->ystart = displacements[t] / xsize;
         work_data->ystop = work_data->ystart + writeCounts[t] / xsize;
-        work_data->src = &src[displacements[t]];
-        work_data->target = &target[displacements[t]];
+        work_data->src = src;
+        work_data->target = target;
         work_data->radius = radius;
+        work_data->myId = t;
         ret = pthread_create(&threads[t], NULL, blurfilter, &thread_data_array[t]);
         if (ret) {
             printf("ERROR! Return code: %d\n", ret); 
@@ -106,10 +103,12 @@ int main (int argc, char ** argv) {
 	    1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
 
     /* write result */
-    printf("Writing output file\n");
     
     if(write_ppm (argv[4], xsize, ysize, (char *)target) != 0)
       exit(1);
+
+    free(displacements);
+    free(writeCounts);
 
     for(t=0; t < numThreads; t++)
     {

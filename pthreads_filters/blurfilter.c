@@ -28,10 +28,11 @@ void* blurfilter(void *tParams){
 
   const double *w = sharedData->w;
   const int xsize = sharedData->xsize;
-  const int ysize = sharedData->xsize;
+  const int ysize = sharedData->ysize;
   const int ystart = workData->ystart;
   const int ystop = workData->ystop;
   const int radius = workData->radius;
+  const int myId = workData->myId;
 
   pixel* src = workData->src;
   pixel* target = workData->target; 
@@ -45,6 +46,7 @@ void* blurfilter(void *tParams){
 
   ystartfirst = (ystartfirst < 0) ? 0 : ystartfirst;
   ystopfirst = (ystopfirst < 0) ? 0 : ystopfirst;
+
 
   for (y=ystartfirst; y<ystopfirst; y++) {
     for (x=0; x<xsize; x++) {
@@ -76,6 +78,7 @@ void* blurfilter(void *tParams){
   }
 
   for (y=ystart; y<ystop; y++) {
+
     for (x=0; x<xsize; x++) {
       r = w[0] * pix(dst, x, y, xsize)->r;
       g = w[0] * pix(dst, x, y, xsize)->g;
@@ -98,9 +101,10 @@ void* blurfilter(void *tParams){
 	        n += wc;
 	      }
       }
+
       pix(target,x,y, xsize)->r = r/n;
-      pix(target,x,y, xsize)->g = g/n;
       pix(target,x,y, xsize)->b = b/n;
+      pix(target,x,y, xsize)->g = g/n;
     }
   }
 }
