@@ -127,6 +127,11 @@ void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *send
       currentDisplacement += sendCount;
 
       restPixels--;
+      
+      if(myId == 0){
+	printf("displacement%d: %d\n", i, currentDisplacement);
+      	printf("sendCount%d: %d\n", i, sendCount);
+      }
     }
 }
 
