@@ -72,18 +72,11 @@ int main (int argc, char ** argv) {
   memset(workData, 0, workDataSize * sizeof(pixel));
   
   calcDispls(xsize, ysize, numberProc, displacements, sendCounts);
-  //  constructPixelDataType(&pixelType);
   MPI_Type_contiguous(3, MPI_CHAR, &pixelType);
   MPI_Type_commit(&pixelType);
 
 
-  if(myId == 0)
-    printf("Scatterv, datasize: %d\n", workDataSize);
-
   MPI_Scatterv(src, sendCounts, displacements, pixelType, workData, sendCounts[myId], pixelType, 0, MPI_COMM_WORLD);
-
-  if ( myId ==0 )
-    printf("Has scattered the image, calling filter\n");
 
   thresfilter(sendCounts[myId], workData, numberProc, myId, xsize * ysize);
 
