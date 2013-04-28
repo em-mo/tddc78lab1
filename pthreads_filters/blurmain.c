@@ -24,7 +24,7 @@ int main (int argc, char ** argv) {
     int* displacements;
     int* writeCounts;
 
-    
+        
 
     /* Take care of the arguments */
 
@@ -52,6 +52,8 @@ int main (int argc, char ** argv) {
 	exit(1);
     }
 
+    memcpy(&target, &src, MAX_PIXELS * sizeof(pixel));
+
     printf("Has read the image, generating coefficients\n");
 
     /* filter */
@@ -61,8 +63,9 @@ int main (int argc, char ** argv) {
 
    // clock_gettime(CLOCK_REALTIME, &stime);
 
-    
-    printf("before calcDispls");
+    displacements = (int*) malloc(numThreads * sizeof(int));
+    writeCounts = (int*) malloc(numThreads * sizeof(int));
+
     calcDispls(xsize, ysize, numThreads, displacements, writeCounts);
 
     pthread_t threads[numThreads]; 
@@ -76,16 +79,16 @@ int main (int argc, char ** argv) {
 
     for(t=0; t < numThreads; t++)
     {   
-        struct thread_work_data work_data;
-        thread_data_array[t].workData = &work_data;
+        struct thread_work_data* work_data = (struct thread_work_data*) malloc(sizeof(struct thread_work_data));
+        thread_data_array[t].workData = work_data;
         thread_data_array[t].sharedData = &shared_data;
 
-        work_data.ystart = displacements[t] / xsize;
-        work_data.ystop = work_data.ystart + writeCounts[t] / xsize;
-        work_data.src = src + displacements[t];
-        work_data.target = target + displacements[t];
-        work_data.radius = radius;
-        ret = pthread_create(&threads[t], NULL, blurfilter, thread_data_array);
+        work_data->ystart = displacements[t] / xsize;
+        work_data->ystop = work_data->ystart + writeCounts[t] / xsize;
+        work_data->src = &src[displacements[t]];
+        work_data->target = &target[displacements[t]];
+        work_data->radius = radius;
+        ret = pthread_create(&threads[t], NULL, blurfilter, &thread_data_array[t]);
         if (ret) {
             printf("ERROR! Return code: %d\n", ret); 
             exit(-1); 
@@ -105,9 +108,13 @@ int main (int argc, char ** argv) {
     /* write result */
     printf("Writing output file\n");
     
-    if(write_ppm (argv[4], xsize, ysize, (char *)src) != 0)
+    if(write_ppm (argv[4], xsize, ysize, (char *)target) != 0)
       exit(1);
 
+    for(t=0; t < numThreads; t++)
+    {
+        free(thread_data_array[t].workData);
+    }
 
     return(0);
 }
@@ -122,7 +129,6 @@ void calcDispls(int xsize, int ysize, int numThreads, int *displacements, int *w
     for (i = 0; i < numThreads; i++) 
     {
         displacements[i] = currentDisplacement;
-
         writeCount = restRows > 0 ? rows + 1 : rows;
         writeCount *= xsize;
         writeCounts[i] = writeCount;

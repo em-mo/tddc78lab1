@@ -1,5 +1,5 @@
 
-CFLAGS = 
+CFLAGS =
 
 LFLAGS= -lpthread -lrt -lm
 
@@ -9,7 +9,7 @@ clean:
 	-$(RM) *.o blur thresc
 
 blurc: ppmio.o gaussw.o blurfilter.o blurmain.o
-	cc -o $@ ppmio.o gaussw.o blurfilter.o blurmain.o $(LFLAGS)
+	cc -g -o $@ ppmio.o gaussw.o blurfilter.o blurmain.o $(LFLAGS)
 
 thresc: thresmain.o ppmio.o thresfilter.o
 	cc -fast -o $@ thresmain.o ppmio.o thresfilter.o $(LFLAGS)

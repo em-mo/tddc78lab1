@@ -40,6 +40,8 @@ void* blurfilter(void *tParams){
   double r,g,b,n, wc;
   pixel dst[MAX_PIXELS];
 
+  ystartfirst = ystart - radius;
+  ystopfirst = ystop + radius;
 
   ystartfirst = (ystartfirst < 0) ? 0 : ystartfirst;
   ystopfirst = (ystopfirst < 0) ? 0 : ystopfirst;
