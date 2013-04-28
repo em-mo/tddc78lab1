@@ -39,7 +39,8 @@ void* blurfilter(void *tParams){
 
   int x,y,x2,y2, wi, ystartfirst, ystopfirst;
   double r,g,b,n, wc;
-  pixel dst[MAX_PIXELS];
+
+  pixel* dst = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
 
   ystartfirst = ystart - radius;
   ystopfirst = ystop + radius;
@@ -107,6 +108,8 @@ void* blurfilter(void *tParams){
       pix(target,x,y, xsize)->g = g/n;
     }
   }
+
+  free(dst);
 }
 
 

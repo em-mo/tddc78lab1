@@ -85,7 +85,9 @@ int main (int argc, char ** argv) {
         work_data->target = target;
         work_data->radius = radius;
         work_data->myId = t;
+
         ret = pthread_create(&threads[t], NULL, blurfilter, &thread_data_array[t]);
+
         if (ret) {
             printf("ERROR! Return code: %d\n", ret); 
             exit(-1); 
