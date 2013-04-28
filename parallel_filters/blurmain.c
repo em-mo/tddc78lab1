@@ -64,15 +64,11 @@ int main (int argc, char ** argv)
         exit(1);
     }
 
-    printf("Has read the image, generating coefficients\n");;
-
     if(myId == 0)
         stime = MPI_Wtime();
     
     /* filter */
     get_gauss_weights(radius, w);
-
-    printf("Calling filter\n");
 
     constructPixelDataType(&pixelType);
 
