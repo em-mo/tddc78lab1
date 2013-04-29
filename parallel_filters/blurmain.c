@@ -80,14 +80,17 @@ int main (int argc, char ** argv)
 
     calcDispls(xsize, ysize, numberProc, myId, displacements, sendCounts);
 
+    /* Calculate start and stop row for every process */
     ystart = displacements[myId] / xsize;
     ystop = ystart + sendCounts[myId] / xsize;
 
+    /* Account for last row in picture */
     if (myId == numberProc - 1)
         ystop++;
 
     blurfilter(xsize, ysize, src, radius, w, ystart, ystop);
 
+    /* Gather result into target */
     MPI_Gatherv(&src[displacements[myId]], sendCounts[myId], pixelType, target, sendCounts, displacements, pixelType, 0, MPI_COMM_WORLD);
 
     if(myId == 0)
@@ -107,6 +110,7 @@ int main (int argc, char ** argv)
     return(0);
 }
 
+/* Calculates displacements and send counts for every process */
 void calcDispls(int xsize, int ysize, int numberProc, int myId, int *displacements, int *sendCounts)
 {
     int currentDisplacement = 0;

@@ -27,6 +27,7 @@ void blurfilter(const int xsize, const int ysize, pixel* src, const int radius, 
   double r,g,b,n, wc;
   pixel dst[MAX_PIXELS];
 
+  /* Account for radius above and below the actual rows that the process should handle */
   ystartfirst = ystart - radius;
   ystopfirst = ystop + radius;
 

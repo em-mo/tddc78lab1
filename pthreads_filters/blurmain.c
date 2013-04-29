@@ -8,10 +8,12 @@
 #include "gaussw.h"
 
 void calcDispls(int xsize, int ysize, int numThreads, int *displacements, int *writeCounts);
+
 #define MAX_RAD 1000
 pixel src[MAX_PIXELS];
 pixel target[MAX_PIXELS];
 double w[MAX_RAD];
+
 int main (int argc, char ** argv) {
 
     int numThreads;
@@ -62,8 +64,10 @@ int main (int argc, char ** argv) {
     displacements = (int*) malloc(numThreads * sizeof(int));
     writeCounts = (int*) malloc(numThreads * sizeof(int));
 
+    /* Calculate displacements */
     calcDispls(xsize, ysize, numThreads, displacements, writeCounts);
 
+    /*Initiate shared data for threads*/
     pthread_t threads[numThreads]; 
     struct thread_data thread_data_array[numThreads];
     struct thread_shared_data shared_data;
@@ -73,6 +77,7 @@ int main (int argc, char ** argv) {
 
     int t, ret;
 
+    /* Initiate work data for thread and create new threads */
     for(t=0; t < numThreads; t++)
     {   
         struct thread_work_data* work_data = (struct thread_work_data*) malloc(sizeof(struct thread_work_data));
@@ -94,6 +99,7 @@ int main (int argc, char ** argv) {
         }  
     }
 
+    /* Join threads */
     for(t=0; t < numThreads; t++)
     {
         pthread_join(threads[t], NULL);

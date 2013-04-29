@@ -8,6 +8,8 @@
 #ifndef _BLURFILTER_H_
 #define _BLURFILTER_H_
 
+#include <stdlib.h>
+
 /* NOTE: This structure must not be padded! */
 typedef struct _pixel {
     unsigned char r,g,b;
