@@ -7,7 +7,7 @@ void thresfilter(const int nump, pixel* src, int numberProc, int myId, int total
   uint totalSum = 0;
 
   double avg;
-
+  // Calculate a private sum, get global total sum and then take the average
   for(i = 0, sum = 0; i < nump; i++) {
     sum += (uint)src[i].r + (uint)src[i].g + (uint)src[i].b;
   }

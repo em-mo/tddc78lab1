@@ -45,15 +45,18 @@ int main (int argc, char ** argv) {
     displacements = (int*) malloc(numThreads * sizeof(int));
     writeCounts = (int*) malloc(numThreads * sizeof(int));
     thread_argument_data = (struct thread_data*) malloc(numThreads * sizeof(struct thread_data));
-  
+    
+
     calcDispls(xsize, ysize, numThreads, displacements, writeCounts);
 
+    // Init shared data
     shared_data.totalPixels = xsize*ysize;
     shared_data.sum = 0;
     pthread_mutex_init(&(shared_data.sumMutex), NULL);
     pthread_cond_init(&(shared_data.countThreadsCond), NULL);
     shared_data.sumThreadCount = numThreads;
 
+    // Init private data and run threads
     int t;
     for (t = 0; t < numThreads; t++)
     {
@@ -78,7 +81,7 @@ int main (int argc, char ** argv) {
 
     printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
         1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
-    
+
     /* write result */
     printf("Writing output file\n");
     
@@ -98,6 +101,8 @@ int main (int argc, char ** argv) {
     return(0);
 }
 
+// Calculates where each thread should start in the image file
+// and how much data it should work on
 void calcDispls(int xsize, int ysize, int numThreads, int *displacements, int *writeCounts)
 {
     int currentDisplacement = 0;

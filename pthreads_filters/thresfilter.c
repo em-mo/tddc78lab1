@@ -8,6 +8,7 @@ void *thresfilter(void *params)
     
     struct thread_data* thread_argument_data = (struct thread_data*) params;
 
+    // Get arguments
     pixel* src = thread_argument_data->workData;
     const int workDataSize = thread_argument_data->workDataSize;
     unsigned int* finalSum = &(thread_argument_data->shared_data->sum);
@@ -21,9 +22,13 @@ void *thresfilter(void *params)
         sum += (uint)src[i].r + (uint)src[i].g + (uint)src[i].b;
     }
   
+    // Conditional lock to synchronize threads
+    // Only divide when the sum is complete
     pthread_mutex_lock(sumMutex);
+    
     *finalSum += sum;
     *sumThreadCount -= 1;
+    
     if (*sumThreadCount == 0)
       pthread_cond_broadcast(countThreadsCond);
     while (*sumThreadCount != 0)

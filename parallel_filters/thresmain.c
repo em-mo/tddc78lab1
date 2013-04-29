@@ -72,9 +72,7 @@ int main (int argc, char ** argv) {
   memset(workData, 0, workDataSize * sizeof(pixel));
   
   calcDispls(xsize, ysize, numberProc, displacements, sendCounts);
-  MPI_Type_contiguous(3, MPI_CHAR, &pixelType);
-  MPI_Type_commit(&pixelType);
-
+  constructPixelDataType(&pixelType);
 
   MPI_Scatterv(src, sendCounts, displacements, pixelType, workData, sendCounts[myId], pixelType, 0, MPI_COMM_WORLD);
 
@@ -100,6 +98,8 @@ int main (int argc, char ** argv) {
 }
 
 
+// Calculates where each thread should start in the image file
+// and how much data it should work on
 void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *sendCounts)
 {
   int currentDisplacement = 0;
@@ -128,24 +128,8 @@ void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *send
     }
 }
 
-void constructPixelDataType(MPI_Datatype* pixelDataType) 
+void constructPixelDataType(MPI_Datatype* pixelType) 
 {
-  pixel item;
-
-  int block_lengths [] = {1, 1, 1};
-  MPI_Datatype block_types [] = {MPI_CHAR, MPI_CHAR, MPI_CHAR};
-  MPI_Aint start, displacement[3];
-
-  MPI_Address(&item, &start);
-  MPI_Address(&item.r, &displacement[0]);
-  MPI_Address(&item.g, &displacement[1]);
-  MPI_Address(&item.b, &displacement[2]);
-
-  displacement[0] -= start;
-  displacement[1] -= start;
-  displacement[2] -= start;
-
-  MPI_Type_struct(3, block_lengths, displacement, block_types, pixelDataType);
-
-  MPI_Type_commit(pixelDataType);
+  MPI_Type_contiguous(3, MPI_CHAR, &pixelType);
+  MPI_Type_commit(&pixelType);
 }
