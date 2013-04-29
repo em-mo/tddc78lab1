@@ -19,7 +19,7 @@ int main (int argc, char ** argv) {
     struct thread_data* thread_argument_data;
 
     int* displacements;
-    int* sendCounts;
+    int* writeCounts;
 
     /* Take care of the arguments */
 
@@ -39,12 +39,14 @@ int main (int argc, char ** argv) {
 
     numThreads  = atoi(argv[3]);
 
+    clock_gettime(CLOCK_REALTIME, &stime);
+
     threads = (pthread_t*) malloc(numThreads * sizeof(pthread_t));
     displacements = (int*) malloc(numThreads * sizeof(int));
-    sendCounts = (int*) malloc(numThreads * sizeof(int));
+    writeCounts = (int*) malloc(numThreads * sizeof(int));
     thread_argument_data = (struct thread_data*) malloc(numThreads * sizeof(struct thread_data));
   
-    calcDispls(xsize, ysize, numThreads, displacements, sendCounts);
+    calcDispls(xsize, ysize, numThreads, displacements, writeCounts);
 
     shared_data.totalPixels = xsize*ysize;
     shared_data.sum = 0;
@@ -57,7 +59,7 @@ int main (int argc, char ** argv) {
     {
         thread_argument_data[t].shared_data = &shared_data;
         thread_argument_data[t].workData = &src[displacements[t]];
-        thread_argument_data[t].workDataSize = sendCounts[t];
+        thread_argument_data[t].workDataSize = writeCounts[t];
 
         if (pthread_create(&threads[t], NULL, thresfilter, (void*)&thread_argument_data[t])) 
         {
@@ -72,6 +74,7 @@ int main (int argc, char ** argv) {
     {
         pthread_join(threads[t], NULL);
     }
+    clock_gettime(CLOCK_REALTIME, &etime);
 
 
     /* write result */
@@ -80,7 +83,7 @@ int main (int argc, char ** argv) {
     
     free(threads);
     free(displacements);
-    free(sendCounts);
+    free(writeCounts);
 
     if(write_ppm (argv[2], xsize, ysize, (char *)src) != 0) 
     {
