@@ -110,7 +110,7 @@ void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *send
   MPI_Comm_rank(MPI_COMM_WORLD, &myId);  
 
   for (i = 0; i < numProc; i++) 
-    {
+  {
       displacements[i] = currentDisplacement;
       
       sendCount = restPixels > 0 ? pixels + 1 : pixels;
@@ -120,13 +120,9 @@ void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *send
       currentDisplacement += sendCount;
 
       restPixels--;
-      
-      if(myId == 0){
-	printf("displacement%d: %d\n", i, currentDisplacement);
-      	printf("sendCount%d: %d\n", i, sendCount);
-      }
-    }
+  }
 }
+
 
 void constructPixelDataType(MPI_Datatype* pixelType) 
 {
