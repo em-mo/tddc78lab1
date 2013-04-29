@@ -130,6 +130,6 @@ void calcDispls(int xsize, int ysize, int numProc, int *displacements, int *send
 
 void constructPixelDataType(MPI_Datatype* pixelType) 
 {
-  MPI_Type_contiguous(3, MPI_CHAR, &pixelType);
-  MPI_Type_commit(&pixelType);
+  MPI_Type_contiguous(3, MPI_CHAR, pixelType);
+  MPI_Type_commit(pixelType);
 }

@@ -15,6 +15,8 @@ int main (int argc, char ** argv) {
     pixel target[MAX_PIXELS];
     struct timespec stime, etime;
 
+    double start, end;
+
     struct thread_shared_data shared_data;
     struct thread_data* thread_argument_data;
 
@@ -40,6 +42,7 @@ int main (int argc, char ** argv) {
     numThreads  = atoi(argv[3]);
 
     clock_gettime(CLOCK_REALTIME, &stime);
+    start = MPI_Wtime();
 
     threads = (pthread_t*) malloc(numThreads * sizeof(pthread_t));
     displacements = (int*) malloc(numThreads * sizeof(int));
