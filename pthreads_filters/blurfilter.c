@@ -46,7 +46,7 @@ void* blurfilter(void *tParams){
   ystopfirst = ystop + radius;
 
   ystartfirst = (ystartfirst < 0) ? 0 : ystartfirst;
-  ystopfirst = (ystopfirst < 0) ? 0 : ystopfirst;
+  ystopfirst = (ystopfirst > ysize) ? ysize : ystopfirst;
 
 
   for (y=ystartfirst; y<ystopfirst; y++) {

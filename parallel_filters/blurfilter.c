@@ -31,7 +31,7 @@ void blurfilter(const int xsize, const int ysize, pixel* src, const int radius, 
   ystopfirst = ystop + radius;
 
   ystartfirst = (ystartfirst < 0) ? 0 : ystartfirst;
-  ystopfirst = (ystopfirst < 0) ? 0 : ystopfirst;
+  ystopfirst = (ystopfirst > ysize) ? ysize : ystopfirst;
 
   for (y=ystartfirst; y<ystopfirst; y++) 
   {
