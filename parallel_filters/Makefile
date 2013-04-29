@@ -1,7 +1,7 @@
 
 CFLAGS = -Nmpi
 
-LFLAGS= -lpthread -lrt -lm
+LFLAGS= -lpthread -lrt -lm -Nmpi
 
 CC= icc
 
@@ -11,10 +11,10 @@ clean:
 	-$(RM) *.o blur thresc
 
 blurc: ppmio.o gaussw.o blurfilter.o blurmain.o
-	cc -o $@ ppmio.o gaussw.o blurfilter.o blurmain.o $(LFLAGS)
+	$(CC) -o $@ ppmio.o gaussw.o blurfilter.o blurmain.o $(LFLAGS)
 
 thresc: thresmain.o ppmio.o thresfilter.o
-	icc -Nmpi -o $@ thresmain.o ppmio.o thresfilter.o $(LFLAGS)
+	$(CC) -Nmpi -o $@ thresmain.o ppmio.o thresfilter.o $(LFLAGS)
 
 arc:
 	tar cf - *.c *.h *.f90 Makefile Makefile.sgi|gzip - > filters.tar.gz
