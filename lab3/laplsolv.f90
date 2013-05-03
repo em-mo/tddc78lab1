@@ -5,10 +5,11 @@ program laplsolv
 ! Written by Fredrik Berntsson (frber@math.liu.se) March 2003
 ! Modified by Berkant Savas (besav@math.liu.se) April 2006
 !-----------------------------------------------------------------------
-  integer, parameter                  :: n=1000, maxiter=1000
+  integer, parameter                  :: n=100, maxiter=100
   double precision,parameter          :: tol=1.0E-3
   double precision,dimension(0:n+1,0:n+1) :: T
   double precision,dimension(n)       :: tmp1,tmp2
+  double precision,dimension(0:n+1)   :: tmp3
   double precision                    :: error,x
   real                                :: t1,t0
   integer                             :: i,j,k
@@ -31,7 +32,11 @@ program laplsolv
      
      do j=1,n
         tmp2=T(1:n,j)
-        T(1:n,j)=(T(0:n-1,j)+T(2:n+1,j)+T(1:n,j+1)+tmp1)/4.0D0
+        tmp3=T(0:n+1,j)
+        do i=1,n
+           T(i,j)=(tmp3(i-1,j)+tmp3(i+1,j)+T(i,j+1)+tmp1(i))/4.0D0
+        end do
+!       T(1:n,j)=(T(0:n-1,j)+T(2:n+1,j)+T(1:n,j+1)+tmp1)/4.0D0
         error=max(error,maxval(abs(tmp2-T(1:n,j))))
         tmp1=tmp2
      end do
