@@ -8,11 +8,10 @@ program laplsolv
   integer, parameter                  :: n=1000, maxiter=1000
   double precision,parameter          :: tol=1.0E-3
   double precision,dimension(0:n+1,0:n+1) :: T
-  double precision,dimension(n)       :: tmp1
-  double precision,dimension(0:n+1)   :: tmp2
+  double precision,dimension(n)       :: tmp1,tmp2
   double precision                    :: error,x
   real                                :: t1,t0
-  integer                             :: i,j,k, iters
+  integer                             :: i,j,k
   character(len=20)                   :: str
   
   ! Set boundary conditions and initial values for the unknowns
@@ -23,26 +22,18 @@ program laplsolv
   
 
   ! Solve the linear system of equations using the Jacobi method
-  !call cpu_time(t0)
-  t0 = omp_get_wtime()
-  !$omp parallel private(i, j, k, tmp1, error, tmp2) shared(iter)
+  call cpu_time(t0)
+  
   do k=1,maxiter
+     
      tmp1=T(1:n,0)
      error=0.0D0
      
      do j=1,n
-        tmp2=T(0:n+1,j)
-        
-        !$omp do
-        do i=1,n
-           T(i,j)=(tmp2(i-1)+tmp2(i+1)+T(i,j+1)+tmp1(i))/4.0D0
-        end do
-        !$omp end do
-        
-
-!       T(1:n,j)=(T(0:n-1,j)+T(2:n+1,j)+T(1:n,j+1)+tmp1)/4.0D0
-        error=max(error,maxval(abs(tmp2(1:n)-T(1:n,j))))
-        tmp1=tmp2(1:n)
+        tmp2=T(1:n,j)
+        T(1:n,j)=(T(0:n-1,j)+T(2:n+1,j)+T(1:n,j+1)+tmp1)/4.0D0
+        error=max(error,maxval(abs(tmp2-T(1:n,j))))
+        tmp1=tmp2
      end do
      
      if (error<tol) then
@@ -50,11 +41,10 @@ program laplsolv
      end if
      
   end do
-  iter = k
-  !$omp end parallel
-  t1 = omp_get_wtime()
+  
+  call cpu_time(t1)
 
-  write(unit=*,fmt=*) 'Time:',t1-t0,'Number of Iterations:',iter
+  write(unit=*,fmt=*) 'Time:',t1-t0,'Number of Iterations:',k
   write(unit=*,fmt=*) 'Temperature of element T(1,1)  =',T(1,1)
 
   ! Uncomment the next part if you want to write the whole solution
