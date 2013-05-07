@@ -10,8 +10,7 @@
 void calcDispls(int xsize, int ysize, int numThreads, int *displacements, int *writeCounts);
 
 #define MAX_RAD 1000
-pixel src[MAX_PIXELS];
-pixel target[MAX_PIXELS];
+
 double w[MAX_RAD];
 
 int main (int argc, char ** argv) {
@@ -26,7 +25,8 @@ int main (int argc, char ** argv) {
     int* displacements;
     int* writeCounts;
 
-        
+    pixel* src = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
+    pixel* target = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
 
     /* Take care of the arguments */
 
@@ -52,8 +52,7 @@ int main (int argc, char ** argv) {
 	exit(1);
     }
 
-    memcpy(&target, &src, MAX_PIXELS * sizeof(pixel));
-
+    memcpy(target, src, MAX_PIXELS * sizeof(pixel));
 
     /* filter */
     get_gauss_weights(radius, w);
@@ -117,6 +116,8 @@ int main (int argc, char ** argv) {
 
     free(displacements);
     free(writeCounts);
+    free(src);
+    free(target);
 
     for(t=0; t < numThreads; t++)
     {

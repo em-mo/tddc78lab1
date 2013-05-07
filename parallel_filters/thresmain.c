@@ -26,7 +26,7 @@ int main (int argc, char ** argv) {
   MPI_Comm_rank(MPI_COMM_WORLD, &myId);
   
   int xsize, ysize, colmax;
-  pixel src[MAX_PIXELS];
+  pixel* src = (pixel*) malloc(MAX_PIXELS*sizeof(pixel));
   double stime, etime;
 
   /* Take care of the arguments */
@@ -50,6 +50,10 @@ int main (int argc, char ** argv) {
     }
   }
 
+  //start time measure
+  if(myId == 0)  
+    stime = MPI_Wtime();
+
   MPI_Bcast(&error, 1, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Bcast(&xsize, 1, MPI_INT, 0, MPI_COMM_WORLD);  
   MPI_Bcast(&ysize, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -59,10 +63,6 @@ int main (int argc, char ** argv) {
     MPI_Finalize();
     exit(1);
   }
-
-  //start time measure
-  if(myId == 0)  
-    stime = MPI_Wtime();
 
   /* Scatter the data */
   workDataSize = ysize * xsize / numberProc + 1;
@@ -93,6 +93,12 @@ int main (int argc, char ** argv) {
 	exit(1);
       }
   }
+
+  free(displacements);
+  free(sendCounts);
+  free(src);
+  free(workData);
+
   MPI_Finalize();
   return(0);
 }

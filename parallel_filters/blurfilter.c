@@ -25,7 +25,7 @@ void blurfilter(const int xsize, const int ysize, pixel* src, const int radius, 
 {
   int x,y,x2,y2, wi, ystartfirst, ystopfirst;
   double r,g,b,n, wc;
-  pixel dst[MAX_PIXELS];
+  pixel* dst = (pixel*) malloc(xsize*ysize * sizeof(pixel));
 
   /* Account for radius above and below the actual rows that the process should handle */
   ystartfirst = ystart - radius;
@@ -101,4 +101,6 @@ void blurfilter(const int xsize, const int ysize, pixel* src, const int radius, 
       pix(src,x,y, xsize)->b = b/n;
     }
   }
+
+  free(dst);
 }

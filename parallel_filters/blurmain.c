@@ -15,7 +15,7 @@ int main (int argc, char ** argv)
     int radius;
     int xsize, ysize, colmax;
     int ystart, ystop;
-    pixel src[MAX_PIXELS];
+    pixel* src = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
     pixel* target;
     #define MAX_RAD 1000
 
@@ -106,6 +106,11 @@ int main (int argc, char ** argv)
             exit(1);
         }
     }
+
+    free(src);
+    free(displacements);
+    free(sendCounts);
+
     MPI_Finalize();
     return(0);
 }
