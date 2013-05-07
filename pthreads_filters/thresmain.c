@@ -11,11 +11,11 @@ void calcDispls(int xsize, int ysize, int numThreads, int *displacements, int *w
 int main (int argc, char ** argv) {
     pthread_t *threads;
     int xsize, ysize, colmax, numThreads;
-    pixel src[MAX_PIXELS];
-    pixel target[MAX_PIXELS];
-    struct timespec stime, etime;
 
-    double start, end;
+    pixel* src = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
+    pixel* target = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
+
+    struct timespec stime, etime;
 
     struct thread_shared_data shared_data;
     struct thread_data* thread_argument_data;
@@ -42,7 +42,6 @@ int main (int argc, char ** argv) {
     numThreads  = atoi(argv[3]);
 
     clock_gettime(CLOCK_REALTIME, &stime);
-    start = MPI_Wtime();
 
     threads = (pthread_t*) malloc(numThreads * sizeof(pthread_t));
     displacements = (int*) malloc(numThreads * sizeof(int));
@@ -83,7 +82,7 @@ int main (int argc, char ** argv) {
     clock_gettime(CLOCK_REALTIME, &etime);
 
     printf("Filtering took: %g secs\n", (etime.tv_sec  - stime.tv_sec) +
-        1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
+       1e-9*(etime.tv_nsec  - stime.tv_nsec)) ;
 
     /* write result */
     printf("Writing output file\n");
@@ -92,6 +91,7 @@ int main (int argc, char ** argv) {
     free(threads);
     free(displacements);
     free(writeCounts);
+    free(target);
 
     if(write_ppm (argv[2], xsize, ysize, (char *)src) != 0) 
     {
