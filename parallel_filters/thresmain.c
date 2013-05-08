@@ -29,6 +29,9 @@ int main (int argc, char ** argv) {
   pixel* src = (pixel*) malloc(MAX_PIXELS*sizeof(pixel));
   double stime, etime;
 
+  if (myId == 0)
+        printf("MPI thres Threads: %d, file: %s\n", numberProc, argv[1]);
+
   /* Take care of the arguments */
 
   if (argc != 3) {
@@ -82,7 +85,7 @@ int main (int argc, char ** argv) {
 
   if(myId == 0){
     etime = MPI_Wtime();
-    printf("Total time: %.6f", etime - stime);
+    printf("Total time: %.6f\n", etime - stime);
   
     /* write result */
     printf("Writing output file\n");

@@ -28,6 +28,8 @@ int main (int argc, char ** argv) {
     pixel* src = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
     pixel* target = (pixel*) malloc(MAX_PIXELS * sizeof(pixel));
 
+    printf("Pthreads blur Threads: %s, radius: %s, file: %s\n", argv[1], argv[2], argv[3]);
+
     /* Take care of the arguments */
 
     if (argc != 5) {

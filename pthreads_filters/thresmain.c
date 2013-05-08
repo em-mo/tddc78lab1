@@ -23,6 +23,8 @@ int main (int argc, char ** argv) {
     int* displacements;
     int* writeCounts;
 
+    printf("Pthreads thres Threads: %s, file: %s\n", argv[3], argv[1]);
+
     /* Take care of the arguments */
 
     if (argc != 4) {
