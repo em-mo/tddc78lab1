@@ -5,6 +5,8 @@ program laplsolv
 ! Written by Fredrik Berntsson (frber@math.liu.se) March 2003
 ! Modified by Berkant Savas (besav@math.liu.se) April 2006
 !-----------------------------------------------------------------------
+  double precision omp_get_wtime
+  integer omp_get_num_threads
   integer, parameter                  :: n=1000, maxiter=1000
   double precision,parameter          :: tol=1.0E-3
   double precision,dimension(0:n+1,0:n+1) :: T
@@ -23,8 +25,8 @@ program laplsolv
   
 
   ! Solve the linear system of equations using the Jacobi method
-  !call cpu_time(t0)
   t0 = omp_get_wtime()
+
   !$omp parallel private(i, j, k, tmp1, error, tmp2) shared(iter)
   do k=1,maxiter
      tmp1=T(1:n,0)
@@ -39,7 +41,6 @@ program laplsolv
         end do
         !$omp end do
         
-
 !       T(1:n,j)=(T(0:n-1,j)+T(2:n+1,j)+T(1:n,j+1)+tmp1)/4.0D0
         error=max(error,maxval(abs(tmp2(1:n)-T(1:n,j))))
         tmp1=tmp2(1:n)
@@ -52,6 +53,7 @@ program laplsolv
   end do
   iter = k
   !$omp end parallel
+
   t1 = omp_get_wtime()
 
   write(unit=*,fmt=*) 'Time:',t1-t0,'Number of Iterations:',iter
