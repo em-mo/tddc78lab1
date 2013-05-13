@@ -32,6 +32,8 @@ program laplsolv
   numthreads = omp_get_num_threads()
   threadId = omp_get_thread_num()
 
+  ! Calculate which columns that are needed to copy for each thread
+  ! The allocation of columns follows the same allocation as omp do
   if (mod(n, numthreads) == 0) then
     numColumns = n / numthreads
     startCol = numColumns * threadId
@@ -65,6 +67,7 @@ program laplsolv
         write(*,*) "Id ", threadId, " start ", j, " col ", startCol
       end if
 
+      ! Border case
       if (j == endCol - 1) then
         T(1:n,j)=(T(0:n-1,j)+T(2:n+1,j)+endTmp+tmp1)/4.0D0
       else        
@@ -86,7 +89,7 @@ program laplsolv
       exit
     end if
   end do
-
+  ! To get the displaying of iterations correct
   !$omp critical
   if (iter < k) then
     iter = k
