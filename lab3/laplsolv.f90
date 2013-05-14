@@ -12,7 +12,7 @@ program laplsolv
   double precision,dimension(0:n+1,0:n+1) :: T
   double precision,dimension(n)       :: tmp1, tmp2, startTmp, endTmp
   double precision                    :: error
-  double precision                                :: t1,t0
+  double precision                    :: t1,t0
   integer                             :: j,k,iters,startCol, endCol, numColumns, f
   character(len=20)                   :: str
   
@@ -42,12 +42,15 @@ program laplsolv
     endCol = startCol + numColumns + 1
   else
     numColumns = ceiling(dble(n) / numthreads)
-    if (threadId == numthreads - 1) then
-      startCol = numColumns * (numthreads - 1)
-      endCol = n + 1
+    if ((threadId+1) * numColumns <= n) then
+       startCol = numColumns * threadId
+       endCol = numColumns * (threadId + 1) + 1
+    else if (threadId * numColumns < n .and. (threadId + 1) * numColumns > n)
+       startCol = numColumns * threadId
+       endCol = n + 1
     else
-      startCol = numColumns * threadId
-      endCol = startCol + numColumns + 1
+       startCol = 0
+       endCol = 0
     end if
   end if
 
