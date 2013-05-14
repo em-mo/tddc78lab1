@@ -6,17 +6,19 @@ program laplsolv
 ! Modified by Berkant Savas (besav@math.liu.se) April 2006
 !-----------------------------------------------------------------------
   double precision omp_get_wtime
-  integer omp_get_num_threads,omp_get_thread_num,numthreads,threadId
-  integer, parameter                  :: n=100, maxiter=1000
+  integer omp_get_num_threads,omp_get_thread_num,numthreads,threadId, omp_get_max_threads
+  integer, parameter                  :: n=100, maxiter=556
   double precision,parameter          :: tol=1.0E-3
   double precision,dimension(0:n+1,0:n+1) :: T
   double precision,dimension(n)       :: tmp1, tmp2, startTmp, endTmp
   double precision                    :: error
-  real                                :: t1,t0
+  double precision                                :: t1,t0
   integer                             :: j,k,iters,startCol, endCol, numColumns, f
   character(len=20)                   :: str
   
   ! Set boundary conditions and initial values for the unknowns
+  write(*,*) "Size", n, " threads ", omp_get_max_threads()
+
   T=0.0D0
   T(0:n+1 , 0)     = 1.0D0
   T(0:n+1 , n+1)   = 1.0D0
@@ -49,22 +51,22 @@ program laplsolv
     end if
   end if
 
+  write(*,*) "Id ", threadId, " start ", startCol, " end ", endCol
   f = 1
-
   do k=1,maxiter
     tmp1=T(1:n,startCol)
     endTmp = T(1:n, endCol)
 
     !$omp barrier
-    error=0.0D0
+    error=1.0D0
 
     !$omp do reduction(max:error)
     do j=1,n
       tmp2=T(1:n,j)
-      
+
       if (f == 1) then
         f = 2
-        write(*,*) "Id ", threadId, " start ", j, " col ", startCol
+        write(*,*) "Id ", threadId, " j  start", j, startCol
       end if
 
       ! Border case
@@ -75,16 +77,15 @@ program laplsolv
       end if
    
       error=max(error,maxval(abs(tmp2-T(1:n,j))))
-
+      numthreads = j
       tmp1=tmp2
     end do
     !$omp end do
 
-    if (f == 2) then
-        f = 0
-        write(*,*) "Id ", threadId, " end   ", j, " col ", endCol
+      if (f == 2) then
+        f = 3
+        write(*,*) "Id ", threadId, " j  end", numthreads, endCol
       end if
-
     if (error<tol) then
       exit
     end if
