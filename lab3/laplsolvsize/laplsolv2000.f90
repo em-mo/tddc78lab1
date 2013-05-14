@@ -7,7 +7,7 @@ program laplsolv
 !-----------------------------------------------------------------------
   double precision omp_get_wtime
   integer omp_get_num_threads,omp_get_thread_num,numthreads,threadId, omp_get_max_threads
-  integer, parameter                  :: n=1000, maxiter=1000
+  integer, parameter                  :: n=2000, maxiter=1000
   double precision,parameter          :: tol=1.0E-3
   double precision,dimension(0:n+1,0:n+1) :: T
   double precision,dimension(n)       :: tmp1, tmp2, startTmp, endTmp
