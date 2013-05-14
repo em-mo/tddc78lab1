@@ -7,13 +7,13 @@ program laplsolv
 !-----------------------------------------------------------------------
   double precision omp_get_wtime
   integer omp_get_num_threads,omp_get_thread_num,numthreads,threadId, omp_get_max_threads
-  integer, parameter                  :: n=100, maxiter=556
+  integer, parameter                  :: n=100, maxiter=1000
   double precision,parameter          :: tol=1.0E-3
   double precision,dimension(0:n+1,0:n+1) :: T
   double precision,dimension(n)       :: tmp1, tmp2, startTmp, endTmp
   double precision                    :: error
   double precision                    :: t1,t0
-  integer                             :: j,k,iters,startCol, endCol, numColumns, f
+  integer                             :: j,k,iters,startCol, endCol, numColumns
   character(len=20)                   :: str
   
   ! Set boundary conditions and initial values for the unknowns
@@ -29,7 +29,7 @@ program laplsolv
   ! Solve the linear system of equations using the Jacobi method
   t0 = omp_get_wtime()
 
-  !$omp parallel private(j, k, tmp1, tmp2, startCol, endCol, numthreads, threadId, numColumns, startTmp, endTmp, f) shared(error)
+  !$omp parallel private(j, k, tmp1, tmp2, startCol, endCol, numthreads, threadId, numColumns, startTmp, endTmp) shared(error)
 
   numthreads = omp_get_num_threads()
   threadId = omp_get_thread_num()
@@ -45,7 +45,7 @@ program laplsolv
     if ((threadId+1) * numColumns <= n) then
        startCol = numColumns * threadId
        endCol = numColumns * (threadId + 1) + 1
-    else if (threadId * numColumns < n .and. (threadId + 1) * numColumns > n)
+    else if (threadId * numColumns < n .and. (threadId + 1) * numColumns > n) then
        startCol = numColumns * threadId
        endCol = n + 1
     else
@@ -54,23 +54,16 @@ program laplsolv
     end if
   end if
 
-  write(*,*) "Id ", threadId, " start ", startCol, " end ", endCol
-  f = 1
   do k=1,maxiter
     tmp1=T(1:n,startCol)
     endTmp = T(1:n, endCol)
-
+    
+    error=0.0D0
+ 
     !$omp barrier
-    error=1.0D0
-
     !$omp do reduction(max:error)
     do j=1,n
       tmp2=T(1:n,j)
-
-      if (f == 1) then
-        f = 2
-        write(*,*) "Id ", threadId, " j  start", j, startCol
-      end if
 
       ! Border case
       if (j == endCol - 1) then
@@ -78,21 +71,20 @@ program laplsolv
       else        
         T(1:n,j)=(T(0:n-1,j)+T(2:n+1,j)+T(1:n,j+1)+tmp1)/4.0D0
       end if
-   
+      
       error=max(error,maxval(abs(tmp2-T(1:n,j))))
+      
       numthreads = j
       tmp1=tmp2
     end do
     !$omp end do
 
-      if (f == 2) then
-        f = 3
-        write(*,*) "Id ", threadId, " j  end", numthreads, endCol
-      end if
     if (error<tol) then
       exit
     end if
+    !$omp barrier
   end do
+
   ! To get the displaying of iterations correct
   !$omp critical
   if (iter < k) then
