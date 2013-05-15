@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
+#include <vector>
 #include "definitions.h"
 
 using namespace std;
@@ -11,6 +12,9 @@ using namespace std;
 #define NEIGHBOR_LEFT = 3;
 
 #define MAX_STEPS 100
+
+void initializeBounds(int *myCoords, int *dims, cord_t* bounds);
+void initializeWalls(int *myCoords, int *dims, vector<cord_t*> *walls);
 
 int main(int argc, char** argv)
 {
@@ -30,7 +34,7 @@ int main(int argc, char** argv)
   int currentTimeStep = 0;
   
   vector<cord_t*> walls;
-  vector<part_cord*>[4] neighbourVectors;
+  vector<part_cord*> neighbourVectors[4];
 
  
   dims[0] = 0;
@@ -62,52 +66,52 @@ int main(int argc, char** argv)
 
 void initializeBounds(int *myCoords, int *dims, cord_t* bounds)
 {
-  bounds.x0 = myCoords[0] * (BOX_HORIZ_SIZE / dims[0]);
-  bounds.x1 = (myCoords[0]+1) * (BOX_HORIZ_SIZE / dims[0]);    
-  bounds.y0 = myCoords[1] * (BOX_VERT_SIZE / dims[1]);
-  bounds.y1 = (myCoords[1]+1) * (BOX_VERT_SIZE / dims[1]);
+  bounds->x0 = myCoords[0] * (BOX_HORIZ_SIZE / dims[0]);
+  bounds->x1 = (myCoords[0]+1) * (BOX_HORIZ_SIZE / dims[0]);    
+  bounds->y0 = myCoords[1] * (BOX_VERT_SIZE / dims[1]);
+  bounds->y1 = (myCoords[1]+1) * (BOX_VERT_SIZE / dims[1]);
 }
 
 void initializeWalls(int *myCoords, int *dims, vector<cord_t*> *walls)
 {
   cord_t* wall;
-  if(myCoord[0] == 0)
+  if(myCoords[0] == 0)
     {
-      wall = malloc(sizeof(struct cord));
+      wall = (cord_t*) malloc(sizeof(cord_t));
       wall->x0 = 0;
       wall->y0 = 0;
       wall->x1 = 0;
       wall->y1 = BOX_VERT_SIZE;
-      walls->insert(wall);
+      walls->push_back(wall);
     }
 
-  if(myCoord[1] == 0)
+  if(myCoords[1] == 0)
     {
-      wall = malloc(sizeof(struct cord));
+      wall = (cord_t*) malloc(sizeof(struct cord));
       wall->x0 = 0;
       wall->y0 = 0;
       wall->x1 = BOX_HORIZ_SIZE;
       wall->y1 = 0;
-      walls->insert(wall);
+      walls->push_back(wall);
     }  
   
-  if(myCoord[0] == dims[0] - 1)
+  if(myCoords[0] == dims[0] - 1)
     {
-      wall = malloc(sizeof(struct cord));
+      wall = (cord_t*) malloc(sizeof(struct cord));
       wall->x0 = BOX_HORIZ_SIZE;
       wall->y0 = 0;
       wall->x1 = BOX_HORIZ_SIZE;
       wall->y1 = BOX_VERT_SIZE;
-      walls->insert(wall);
+      walls->push_back(wall);
     }
   
-  if(myCoord[1] == dims[1] - 1)
+  if(myCoords[1] == dims[1] - 1)
     {
-      wall = malloc(sizeof(struct cord));
+      wall = (cord_t*) malloc(sizeof(struct cord));
       wall->x0 = 0;
       wall->y0 = BOX_VERT_SIZE;
       wall->x1 = BOX_HORIZ_SIZE;
       wall->y1 = BOX_VERT_SIZE;
-      walls->insert(wall);
+      walls->push_back(wall);
     }
 }
