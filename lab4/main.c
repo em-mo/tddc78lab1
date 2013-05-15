@@ -1,3 +1,4 @@
+#include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
@@ -6,15 +7,17 @@
 
 using namespace std;
 
-#define NEIGHBOR_TOP = 0;
+#define NEIGHBOR_UP = 0;
 #define NEIGHBOR_RIGHT = 1;
-#define NEIGHBOR_BOTTOM = 2;
+#define NEIGHBOR_DOWN = 2;
 #define NEIGHBOR_LEFT = 3;
 
 #define MAX_STEPS 100
 
+
 void initializeBounds(int *myCoords, int *dims, cord_t* bounds);
 void initializeWalls(int *myCoords, int *dims, vector<cord_t*> *walls);
+void  initializeParticles(int myId, vector<pcord_t> *particles, cord_t bounds)
 
 int main(int argc, char** argv)
 {
@@ -34,8 +37,9 @@ int main(int argc, char** argv)
   int currentTimeStep = 0;
   
   vector<cord_t*> walls;
-  vector<part_cord*> neighbourVectors[4];
-
+  list<pcord_t*> neighbourVectors[4];
+  list<pcord_t*> particles;
+  list<pcord_t*> collidedParticles;
  
   dims[0] = 0;
   dims[1] = 0;
@@ -53,18 +57,74 @@ int main(int argc, char** argv)
   MPI_Dims_create(numberProc, 2, dims);
   printf("x: %d, y: %d\n", dims[0], dims[1]);
   MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &gridComm);
-
   MPI_Cart_rank(gridComm, myCoords, &myId);
 
   initializeBounds(myCoords, dims, &bounds);
   initializeWalls(myCoords, dims, &walls);
-  
-    
+  initializeParticles(myId, bounds, &particles);
+
+  float preassure = 0;
+  while(currentTimeStep < MAX_STEPS)
+    {
+      int t;
+      float tmpPreassure;
+      for(iterator iter = particles.begin(); iter != particles.end(); iter++)
+	{
+	  pcord_t* p1 = *iter;
+	  tmpPreassure = 0;
+
+	  //Check collision with walls
+	  for(iterator wIter = walls.begin(); wIter != wall.end() && tmpPreassure == 0; wIter++)
+	    {
+	      tmpPreassure = collide_wall(p1, **wIter);
+	    }
+
+	  //Check for particle collisions
+	  if(tmpPreassure == 0)
+	    {
+	      for(iterator iter2 = iter + 1; iter2 != particles.end(); iter2++)
+		{
+		  pcord_t* p2 = *iter2;
+
+		  t = collide(p1,p2);
+		  if(t != -1)
+		    {
+		      interact(p1, p2, t);
+		      collidedParticles.push_back(*iter);
+		      collidedParticles.push_back(*iter2);
+		      iter = particles.erase(iter);
+		      particles.erase(iter2);
+		      --iter;
+		      break;
+		    }
+		}
+	    }
+	  else //collided with wall
+	    {
+	      preassure += tmpPreassure;
+	      collidedParticles.push_back(*iter);
+	      iter = particles.erase(iter);
+	      --iter;
+	    }
+	}
+      
+      //Move particles to neighbour lists that should be moved to new porocess.
+      changeLists(particles, bounds, neighbours);
+      changeLists(collidedParticles, bounds, neighbours);
+      
+      // COMMUNICATION
+      
+
+      //RESET LISTS
+
+      currentTimeStep += STEP_SIZE;
+    }
+
   MPI_Finalize();
 }
 
 
-void initializeBounds(int *myCoords, int *dims, cord_t* bounds)
+void initializeBounds(const int *myCoords, const int *dims, cord_t* bounds)
 {
   bounds->x0 = myCoords[0] * (BOX_HORIZ_SIZE / dims[0]);
   bounds->x1 = (myCoords[0]+1) * (BOX_HORIZ_SIZE / dims[0]);    
@@ -72,7 +132,7 @@ void initializeBounds(int *myCoords, int *dims, cord_t* bounds)
   bounds->y1 = (myCoords[1]+1) * (BOX_VERT_SIZE / dims[1]);
 }
 
-void initializeWalls(int *myCoords, int *dims, vector<cord_t*> *walls)
+void initializeWalls(const int *myCoords, const int *dims, vector<cord_t*> *walls)
 {
   cord_t* wall;
   if(myCoords[0] == 0)
@@ -113,5 +173,64 @@ void initializeWalls(int *myCoords, int *dims, vector<cord_t*> *walls)
       wall->x1 = BOX_HORIZ_SIZE;
       wall->y1 = BOX_VERT_SIZE;
       walls->push_back(wall);
+    }
+}
+
+void  initializeParticles(const int myId, const cord_t bounds, vector<pcord_t> *particles)
+{
+  int amount = INIT_NO_PARTICLES + 1;
+  pcord_t* particle;
+  srand(time(NULL) * (myId + 1));
+
+  boundsWidth = bounds.x1 - bounds.x0;
+  boundsHeight = bounds.y1 - bounds.y0;
+  while(--amount)
+    {
+      particle = malloc(sizeof(pcord_t));
+      particle->x = randFloat() * boundsWidth + bounds.x0;
+      particle->y = randFloat() * boundsHeight + bounds.y0;
+
+      particle->vx = randFloat() * MAX_INITIAL_VELOCITY;
+      particle->vy = randFloat() * MAX_INITIAL_VELOCITY;
+      
+      particles.push_back(particle);
+    }
+}
+
+float randFloat()
+{
+  return (float)rand()/(float)RAND_MAX;
+}
+
+void changeLists(list<pcord_t*> l, const cord_t bounds, list<pcord_t*> *neighbours)
+{
+  pcord_t* particle;
+  for(iterator iter = l.begin(); iter != l.end();)
+    {
+      particle = *iter;
+      if(particle->x < bounds.x0)
+	{
+	  neighbours[INDEX_LEFT].push_back(particle);
+	  iter = l.erase(iter);
+	}
+      else if(particle->x > bounds.x1)
+	{
+	  neighbours[INDEX_RIGHT].push_back(particle);
+	  iter = l.erase(iter);
+	}
+      else if(particle->y < bounds.y0)
+	{
+	  neighbours[INDEX_UP].push_back(particle);
+	  iter = l.erase(iter);
+	}
+      else if(particle->y > bounds.y1)
+	{
+	  neighbours[INDEX_DOWN].push_back(particle);
+	  iter = l.erase(iter);
+	}
+      else
+	{
+	  iter++;
+	}
     }
 }
