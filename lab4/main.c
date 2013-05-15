@@ -2,22 +2,25 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
+#include <list>
 #include <vector>
 #include "definitions.h"
 
 using namespace std;
 
-#define NEIGHBOR_UP = 0;
-#define NEIGHBOR_RIGHT = 1;
-#define NEIGHBOR_DOWN = 2;
-#define NEIGHBOR_LEFT = 3;
+#define INDEX_UP 0
+#define INDEX_RIGHT 1
+#define INDEX_DOWN 2
+#define INDEX_LEFT 3
 
 #define MAX_STEPS 100
 
 
-void initializeBounds(int *myCoords, int *dims, cord_t* bounds);
-void initializeWalls(int *myCoords, int *dims, vector<cord_t*> *walls);
-void  initializeParticles(int myId, vector<pcord_t> *particles, cord_t bounds)
+void initializeBounds(const int *myCoords, const int *dims, cord_t* bounds);
+void initializeWalls(const int *myCoords, const int *dims, vector<cord_t*> *walls);
+void  initializeParticles(const int myId, const cord_t bounds, list<pcord_t*> *particles);
+void changeLists(list<pcord_t*> l, const cord_t bounds, list<pcord_t*> *neighbours);
+float randFloat();
 
 int main(int argc, char** argv)
 {
@@ -25,6 +28,10 @@ int main(int argc, char** argv)
   int ierr = MPI_Init(&argc, &argv);
   int myId, numberProc;
   int myCoords[2];
+
+  myCoords[0] = 0;
+  myCoords[1] = 0;
+
 
   //Cartesian Coordinates
   int dims[2];
@@ -37,7 +44,7 @@ int main(int argc, char** argv)
   int currentTimeStep = 0;
   
   vector<cord_t*> walls;
-  list<pcord_t*> neighbourVectors[4];
+  list<pcord_t*> neighbours[4];
   list<pcord_t*> particles;
   list<pcord_t*> collidedParticles;
  
@@ -52,12 +59,14 @@ int main(int argc, char** argv)
   //Initialize MPI
   MPI_Comm_size(MPI_COMM_WORLD, &numberProc);
   MPI_Comm_rank(MPI_COMM_WORLD, &myId);
-
   //Initialize Cartesian Coordinates
   MPI_Dims_create(numberProc, 2, dims);
-  printf("x: %d, y: %d\n", dims[0], dims[1]);
+
+  if (myId == 0)
+    printf("x: %d, y: %d\n", dims[0], dims[1]);
+
   MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &gridComm);
-  MPI_Cart_rank(gridComm, myCoords, &myId);
+  MPI_Cart_coords(gridComm, myId, 2, myCoords);
 
   initializeBounds(myCoords, dims, &bounds);
   initializeWalls(myCoords, dims, &walls);
@@ -68,21 +77,22 @@ int main(int argc, char** argv)
     {
       int t;
       float tmpPreassure;
-      for(iterator iter = particles.begin(); iter != particles.end(); iter++)
+      for(list<pcord_t*>::iterator iter = particles.begin(); iter != particles.end(); iter++)
 	{
 	  pcord_t* p1 = *iter;
 	  tmpPreassure = 0;
 
 	  //Check collision with walls
-	  for(iterator wIter = walls.begin(); wIter != wall.end() && tmpPreassure == 0; wIter++)
+	  for(vector<cord_t*>::iterator wIter = walls.begin(); wIter != walls.end() && tmpPreassure == 0; wIter++)
 	    {
-	      tmpPreassure = collide_wall(p1, **wIter);
+	      tmpPreassure = wall_collide(p1, **wIter);
 	    }
 
 	  //Check for particle collisions
 	  if(tmpPreassure == 0)
 	    {
-	      for(iterator iter2 = iter + 1; iter2 != particles.end(); iter2++)
+        list<pcord_t*>::iterator iter2 = iter;
+	      for(iter2++; iter2 != particles.end(); iter2++)
 		{
 		  pcord_t* p2 = *iter2;
 
@@ -176,24 +186,24 @@ void initializeWalls(const int *myCoords, const int *dims, vector<cord_t*> *wall
     }
 }
 
-void  initializeParticles(const int myId, const cord_t bounds, vector<pcord_t> *particles)
+void  initializeParticles(const int myId, const cord_t bounds, list<pcord_t*> *particles)
 {
   int amount = INIT_NO_PARTICLES + 1;
   pcord_t* particle;
   srand(time(NULL) * (myId + 1));
 
-  boundsWidth = bounds.x1 - bounds.x0;
-  boundsHeight = bounds.y1 - bounds.y0;
+  int boundsWidth = bounds.x1 - bounds.x0;
+  int boundsHeight = bounds.y1 - bounds.y0;
   while(--amount)
     {
-      particle = malloc(sizeof(pcord_t));
+      particle = (pcord_t*) malloc(sizeof(pcord_t));
       particle->x = randFloat() * boundsWidth + bounds.x0;
       particle->y = randFloat() * boundsHeight + bounds.y0;
 
       particle->vx = randFloat() * MAX_INITIAL_VELOCITY;
       particle->vy = randFloat() * MAX_INITIAL_VELOCITY;
       
-      particles.push_back(particle);
+      particles->push_back(particle);
     }
 }
 
@@ -205,7 +215,7 @@ float randFloat()
 void changeLists(list<pcord_t*> l, const cord_t bounds, list<pcord_t*> *neighbours)
 {
   pcord_t* particle;
-  for(iterator iter = l.begin(); iter != l.end();)
+  for(list<pcord_t*>::iterator iter = l.begin(); iter != l.end();)
     {
       particle = *iter;
       if(particle->x < bounds.x0)
