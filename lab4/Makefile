@@ -10,5 +10,8 @@ clean:
 particle: main.o physics.o
 	cc -o $@ $(CFLAGS) main.o physics.o $(LFLAGS)
 
+touch:
+	touch main.c
+
 arc:
 	tar cf - *.c *.h Makefile Makefile.sgi|gzip - > particle.tar.gz

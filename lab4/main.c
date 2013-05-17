@@ -20,15 +20,16 @@ using namespace std;
 
 #define MAX_STEPS 10
 
-
+void doCommunication(vector<pcord_t> *neighbours, const int *neighbourRank, list<pcord_t *> *particles);
+void initializeNeighbours(int neighbourCoords[][2], int *neighbourRanks, int *myCoords, int *dims);
 void initializeBounds(const int *myCoords, const int *dims, cord_t *bounds);
-void initializeWalls(const int *myCoords, const int *dims, vector<cord_t *> *walls);
-void  initializeParticles(const int myId, const cord_t bounds, list<pcord_t *> *particles);
-void changeLists(list<pcord_t *> *origin, const cord_t bounds, list<pcord_t *> *neighbours);
-void resetLists(list<pcord_t *> *particles, list<pcord_t *> *collidedParticles);
+void initializeParticles(const int myId, const cord_t bounds, list<pcord_t *> *particles);
+void changeLists(list<pcord_t *> *origin, const cord_t bounds, vector<pcord_t> *neighbours);
+void resetLists(list<pcord_t *> *particles, list<pcord_t *> *collidedParticles, vector<pcord_t> *neighbours);
 float randFloat();
+void cleanUp(list<pcord_t *> *origin);
 
-MPI_datatype MPI_PCORD;
+MPI_Datatype MPI_PCORD;
 MPI_Comm gridComm;
 
 int main(int argc, char **argv)
@@ -46,7 +47,7 @@ int main(int argc, char **argv)
     int dims[2];
     int periods[2];
     int reorder;
-    
+
     cord_t bounds;
 
     int currentTimeStep = 0;
@@ -58,10 +59,9 @@ int main(int argc, char **argv)
     wall.x1 = BOX_HORIZ_SIZE;
     wall.y1 = BOX_VERT_SIZE;
 
-    vector<cord_t *> walls;
     int neighbourCoords[4][2];
     int neighbourRanks[4];
-    vector<pcord_t *> neighbours[4];
+    vector<pcord_t> neighbours[4];
     list<pcord_t *> particles;
     list<pcord_t *> collidedParticles;
 
@@ -87,14 +87,14 @@ int main(int argc, char **argv)
 
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &gridComm);
     MPI_Cart_coords(gridComm, myId, 2, myCoords);
-    
 
-    initializeNeighbours(neighbourCoords, myCoords);
+
+    initializeNeighbours(neighbourCoords, neighbourRanks, myCoords, dims);
     initializeBounds(myCoords, dims, &bounds);
-    initializeWalls(myCoords, dims, &walls);
     initializeParticles(myId, bounds, &particles);
 
-    printf("Id: %u  walls: %u\n", myId, (unsigned int)walls.size());
+    if (myId == 0)
+        printf("Initialization complete, beginning stepping\n");
 
     int t;
     float preassure = 0;
@@ -139,7 +139,7 @@ int main(int argc, char **argv)
             }
         }
 
-        for (list<pcord_t *>::iterator iter = particles.begin(); iter != particles.end(); ++iter) 
+        for (list<pcord_t *>::iterator iter = particles.begin(); iter != particles.end(); ++iter)
         {
             feuler(*iter, STEP_SIZE);
         }
@@ -149,59 +149,65 @@ int main(int argc, char **argv)
         changeLists(&collidedParticles, bounds, neighbours);
 
         // COMMUNICATION
-	doCommunication(neighbours, neighbourRank, &particles);
+        doCommunication(neighbours, neighbourRanks, &particles);
 
         //RESET LISTS
-	resetLists(&particles, &collidedParticles, neighbours);
+        resetLists(&particles, &collidedParticles, neighbours);
 
         currentTimeStep += STEP_SIZE;
     }
-    
+    if (myId == 0)
+        printf("Steps complete\n");
+
+    resetLists(&particles, &collidedParticles, neighbours);
+
+    printf("ID %d has %u particles\n", myId, (unsigned int)particles.size());
+
+    cleanUp(&particles);
+
     MPI_Type_free(&MPI_PCORD);
     MPI_Finalize();
 }
 
-void doCommunication(list<pcord_t *> *neighbours, const int* neighbourRank, list<pcord_t *>* particles)
+void doCommunication(vector<pcord_t> *neighbours, const int *neighbourRank, list<pcord_t *> *particles)
 {
     MPI_Request request;
 
     //for all neighbours
-    for(int index = 0; index < 4; ++index)
+    for (int index = 0; index < 4; ++index)
     {
-	if (neighbourRank[index] != -1)
-	{
-	    int sendAmount = neighbours[index].size();
-	    MPI_Isend(sendAmount, 1, MPI_INT, neighbourRank[index], TAG_AMOUNT, MPI_COMM_WORLD, &request);
-	    if (sendAmount != 0)
-		MPI_Isend(&neighbours[index].front(), sendAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &request);
-	}
+        if (neighbourRank[index] != -1)
+        {
+            int sendAmount = neighbours[index].size();
+            MPI_Isend(&sendAmount, 1, MPI_INT, neighbourRank[index], TAG_AMOUNT, MPI_COMM_WORLD, &request);
+            if (sendAmount != 0)
+                MPI_Isend(&neighbours[index].front(), sendAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &request);
+        }
     }
 
     //RECEIVE
     MPI_Status status;
-    pcord_t* recvBuffer = (pcord_t*)malloc(sizeof(pcord_t) * COMM_BUFFER_SIZE);
-    for(int index = 0; index < 4; ++index)
+    for (int index = 0; index < 4; ++index)
     {
-	if (neighbourRank[index] != -1)
-	{
-	    int recvAmount;
-	    MPI_Recv(&recvAmount, 1, MPI_INT, neighbourRank[index], TAG_AMOUNT, MPI_COMM_WORLD, &status);
-	    if (recvAmount != 0)
-	    {
-		MPI_Recv(recvBuffer, recvAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &status);
-		for(int i = 0; i < recvAmount; i++)
-		{		    
-		    particles.push_back(recvBuffer[i]);
-		}
-	    }
-	}
+        if (neighbourRank[index] != -1)
+        {
+            int recvAmount;
+            MPI_Recv(&recvAmount, 1, MPI_INT, neighbourRank[index], TAG_AMOUNT, MPI_COMM_WORLD, &status);
+            if (recvAmount != 0)
+            {
+                pcord_t *recvBuffer = (pcord_t *)malloc(sizeof(pcord_t) * recvAmount);
+                MPI_Recv(recvBuffer, recvAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &status);
+                for (int i = 0; i < recvAmount; i++)
+                {
+                    particles->push_back(&recvBuffer[i]);
+                }
+            }
+        }
     }
-    
     MPI_Barrier(MPI_COMM_WORLD);
-    free(recvBuffer);
 }
 
-void resetLists(list<pcord_t *> *particles, list<pcord_t *> *collidedParticles, vector<pcord_t*> neighbours)
+void resetLists(list<pcord_t *> *particles, list<pcord_t *> *collidedParticles, vector<pcord_t> *neighbours)
 {
     while (!collidedParticles->empty())
     {
@@ -211,7 +217,7 @@ void resetLists(list<pcord_t *> *particles, list<pcord_t *> *collidedParticles, 
 
     for (int index = 0; index < 4; ++index)
     {
-	neigbours[index].clear();
+        neighbours[index].clear();
     }
 }
 
@@ -221,50 +227,6 @@ void initializeBounds(const int *myCoords, const int *dims, cord_t *bounds)
     bounds->x1 = (myCoords[0] + 1) * (BOX_HORIZ_SIZE / dims[0]);
     bounds->y0 = myCoords[1] * (BOX_VERT_SIZE / dims[1]);
     bounds->y1 = (myCoords[1] + 1) * (BOX_VERT_SIZE / dims[1]);
-}
-
-void initializeWalls(const int *myCoords, const int *dims, vector<cord_t *> *walls)
-{
-    cord_t *wall;
-    if (myCoords[0] == 0)
-    {
-        wall = (cord_t *) malloc(sizeof(cord_t));
-        wall->x0 = 0;
-        wall->y0 = 0;
-        wall->x1 = 0;
-        wall->y1 = BOX_VERT_SIZE;
-        walls->push_back(wall);
-    }
-
-    if (myCoords[1] == 0)
-    {
-        wall = (cord_t *) malloc(sizeof(struct cord));
-        wall->x0 = 0;
-        wall->y0 = 0;
-        wall->x1 = BOX_HORIZ_SIZE;
-        wall->y1 = 0;
-        walls->push_back(wall);
-    }
-
-    if (myCoords[0] == dims[0] - 1)
-    {
-        wall = (cord_t *) malloc(sizeof(struct cord));
-        wall->x0 = BOX_HORIZ_SIZE;
-        wall->y0 = 0;
-        wall->x1 = BOX_HORIZ_SIZE;
-        wall->y1 = BOX_VERT_SIZE;
-        walls->push_back(wall);
-    }
-
-    if (myCoords[1] == dims[1] - 1)
-    {
-        wall = (cord_t *) malloc(sizeof(struct cord));
-        wall->x0 = 0;
-        wall->y0 = BOX_VERT_SIZE;
-        wall->x1 = BOX_HORIZ_SIZE;
-        wall->y1 = BOX_VERT_SIZE;
-        walls->push_back(wall);
-    }
 }
 
 void  initializeParticles(const int myId, const cord_t bounds, list<pcord_t *> *particles)
@@ -293,7 +255,7 @@ float randFloat()
     return (float)rand() / (float)RAND_MAX;
 }
 
-void changeLists(list<pcord_t *> *origin, const cord_t bounds, list<pcord_t *> *neighbours)
+void changeLists(list<pcord_t *> *origin, const cord_t bounds, vector<pcord_t> *neighbours)
 {
     pcord_t *particle;
     for (list<pcord_t *>::iterator iter = origin->begin(); iter != origin->end();)
@@ -301,22 +263,26 @@ void changeLists(list<pcord_t *> *origin, const cord_t bounds, list<pcord_t *> *
         particle = *iter;
         if (particle->x < bounds.x0)
         {
-            neighbours[INDEX_LEFT].push_back(particle);
+            neighbours[INDEX_LEFT].push_back(*particle);
+            free(particle);
             iter = origin->erase(iter);
         }
         else if (particle->x > bounds.x1)
         {
-            neighbours[INDEX_RIGHT].push_back(particle);
+            neighbours[INDEX_RIGHT].push_back(*particle);
+            free(particle);
             iter = origin->erase(iter);
         }
         else if (particle->y < bounds.y0)
         {
-            neighbours[INDEX_UP].push_back(particle);
+            neighbours[INDEX_UP].push_back(*particle);
+            free(particle);
             iter = origin->erase(iter);
         }
         else if (particle->y > bounds.y1)
         {
-            neighbours[INDEX_DOWN].push_back(particle);
+            neighbours[INDEX_DOWN].push_back(*particle);
+            free(particle);
             iter = origin->erase(iter);
         }
         else
@@ -326,30 +292,38 @@ void changeLists(list<pcord_t *> *origin, const cord_t bounds, list<pcord_t *> *
     }
 }
 
-void initializeNeighbours(int** neighbourCoords, int* neighbourRanks, int* myCoords, int* dims)
+void initializeNeighbours(int neighbourCoords[][2], int *neighbourRanks, int *myCoords, int *dims)
 {
-    for (int i = 0; i < 4; ++i) 
+    for (int i = 0; i < 4; ++i)
     {
-	neighbourRanks[i] = -1;
+        neighbourRanks[i] = -1;
     }
 
-    neighbourCoords[INDEX_UP][0] = myCoords[0]; 
+    neighbourCoords[INDEX_UP][0] = myCoords[0];
     neighbourCoords[INDEX_UP][1] = myCoords[1] - 1;
     if (neighbourCoords[INDEX_UP][1] != -1)
-	MPI_Cart_rank(gridComm, neighbourCoords[INDEX_UP], &neighbourRanks[INDEX_UP]);
-    
-    neighbourCoords[INDEX_RIGHT][0] = myCoords[0] + 1; 
+        MPI_Cart_rank(gridComm, neighbourCoords[INDEX_UP], &neighbourRanks[INDEX_UP]);
+
+    neighbourCoords[INDEX_RIGHT][0] = myCoords[0] + 1;
     neighbourCoords[INDEX_RIGHT][1] = myCoords[1];
     if (neighbourCoords[INDEX_RIGHT][0] != dims[0])
-	MPI_Cart_rank(gridComm, neighbourCoords[INDEX_RIGHT], &neighbourRanks[INDEX_RIGHT]);
+        MPI_Cart_rank(gridComm, neighbourCoords[INDEX_RIGHT], &neighbourRanks[INDEX_RIGHT]);
 
-    neighbourCoords[INDEX_DOWN][0] = myCoords[0]; 
+    neighbourCoords[INDEX_DOWN][0] = myCoords[0];
     neighbourCoords[INDEX_DOWN][1] = myCoords[1] + 1;
     if (neighbourCoords[INDEX_DOWN][1] != dims[1])
-	MPI_Cart_rank(gridComm, neighbourCoords[INDEX_DOWN], &neighbourRanks[INDEX_DOWN]);
+        MPI_Cart_rank(gridComm, neighbourCoords[INDEX_DOWN], &neighbourRanks[INDEX_DOWN]);
 
-    neighbourCoords[INDEX_LEFT][0] = myCoords[0] - 1; 
+    neighbourCoords[INDEX_LEFT][0] = myCoords[0] - 1;
     neighbourCoords[INDEX_LEFT][1] = myCoords[1];
     if (neighbourCoords[INDEX_LEFT][0] != -1)
-	MPI_Cart_rank(gridComm, neighbourCoords[INDEX_LEFT], &neighbourRanks[INDEX_LEFT]);
+        MPI_Cart_rank(gridComm, neighbourCoords[INDEX_LEFT], &neighbourRanks[INDEX_LEFT]);
+}
+
+void cleanUp(list<pcord_t *> *particles)
+{
+    for (list<pcord_t *>::iterator iter = particles->begin(); iter != particles->end(); ++iter)
+    {
+        free(*iter);
+    }
 }
