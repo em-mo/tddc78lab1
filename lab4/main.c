@@ -13,6 +13,11 @@ using namespace std;
 #define INDEX_DOWN 2
 #define INDEX_LEFT 3
 
+#define TAG_AMOUNT 444
+#define TAG_SEND 555
+
+#define PCORD_SIZE 4
+
 #define MAX_STEPS 10
 
 
@@ -39,7 +44,8 @@ int main(int argc, char **argv)
     int periods[2];
     int reorder;
     MPI_Comm gridComm;
-
+    MPI_datatype MPI_PCORD;
+    
     cord_t bounds;
 
     int currentTimeStep = 0;
@@ -52,7 +58,9 @@ int main(int argc, char **argv)
     wall.y1 = BOX_VERT_SIZE;
 
     vector<cord_t *> walls;
-    list<pcord_t *> neighbours[4];
+    int neighbourCoords[4][2];
+    int neighbourRanks[4];
+    vector<pcord_t *> neighbours[4];
     list<pcord_t *> particles;
     list<pcord_t *> collidedParticles;
 
@@ -70,12 +78,17 @@ int main(int argc, char **argv)
     //Initialize Cartesian Coordinates
     MPI_Dims_create(numberProc, 2, dims);
 
+    MPI_Type_contiguous(PCORD_SIZE, MPI_FLOAT, &MPI_PCORD);
+    MPI_Type_commit(&MPI_PCORD);
+
     // if (myId == 0)
     //     printf("x: %d, y: %d\n", dims[0], dims[1]);
 
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &gridComm);
     MPI_Cart_coords(gridComm, myId, 2, myCoords);
+    
 
+    initializeNeighbours(neighbourCoords, myCoords);
     initializeBounds(myCoords, dims, &bounds);
     initializeWalls(myCoords, dims, &walls);
     initializeParticles(myId, bounds, &particles);
@@ -91,20 +104,6 @@ int main(int argc, char **argv)
         {
             pcord_t *p1 = *iter;
             tmpPreassure = 0;
-
-            //Check collision with walls
-            // for (vector<cord_t *>::iterator wIter = walls.begin(); wIter != walls.end() && tmpPreassure == 0; ++wIter)
-            // {
-            //     if (myId == 3)
-            //         printf("Id: %d, bound    x0 y0 %f %f  x1 y1 %f %f\n", myId, (*wIter)->x0, (*wIter)->y0, (*wIter)->x1, (*wIter)->y1);
-
-            //     if (myId == 3)
-            //         printf("Id: %d, particle x0 y0 %f %f  vx vy %f %f\n\n", myId, p1->x, p1->y, p1->vx, p1->vy);
-
-            //     tmpPreassure = wall_collide(p1, **wIter);
-            //     // if (myId == 3)
-            //     //     printf("Id: %d preassure: %f\n", myId, tmpPreassure);
-            // }
 
             tmpPreassure = wall_collide(p1, wall);
 
@@ -157,32 +156,42 @@ int main(int argc, char **argv)
 
         currentTimeStep += STEP_SIZE;
     }
-
+    
+    MPI_Type_free(&MPI_PCORD);
     MPI_Finalize();
 }
 
-void doCommunication() 
+void doCommunication(list<pcord_t *> *neighbours, int* neighbourRank)
 {
-    //Left neighbour
-    if (myCoords[0] > 0)
-    {
+    MPI_Request request;
 
-    }
-    //Up neighbour
-    if (myCoords[1] > 0)
+    //for all neighbours
+    for(int index = 0; index < 4; index++)
     {
-
+	if (neighbourRank[index] != -1)
+	{
+	    int sendAmount = neighbours[index].size();
+	    MPI_Isend(sendAmount, 1, MPI_INT, neighbourRank[index], TAG_AMOUNT, MPI_COMM_WORLD, &request);
+	    if (sendAmount != 0)
+		MPI_Isend(&neighbours[index].front(), sendAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &request);
+	}
     }
-    //Right neighbour
-    if (myCoords[0] < dims[0] - 1)
+
+    //RECEIVE
+    MPI_Status status;
+    float* recvBuf = malloc(sizeof(float) * COMM_BUFFER_SIZE);
+    for(int index = 0; index < 4; index++)
     {
-
-    }
-    //Down neighbour
-    if (myCoords[1] < dims[1] - 1)
-    {
-
-    }
+	if (neighbourRank[index] != -1)
+	{
+	    int recvAmount;
+	    MPI_Recv(&recvAmount, 1, MPI_INT, neighbourRank[index], TAG_AMOUNT, MPI_COMM_WORLD, &status);
+	    if (recvAmount != 0)
+	    {
+		MPI_Recv(&neighbours[index].front(), sendAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &request);
+	    }
+	}
+    }    
 }
 
 void resetLists(list<pcord_t *> *particles, list<pcord_t *> *collidedParticles)
@@ -303,4 +312,32 @@ void changeLists(list<pcord_t *> *origin, const cord_t bounds, list<pcord_t *> *
             iter++;
         }
     }
+}
+
+void initializeNeighbours(MPI_Comm gridComm, int** neighbourCoords, int* neighbourRanks, int* myCoords, int* dims)
+{
+    for (int i = 0; i < 4; ++i) 
+    {
+	neighbourRanks[i] = -1;
+    }
+
+    neighbourCoords[INDEX_UP][0] = myCoords[0]; 
+    neighbourCoords[INDEX_UP][1] = myCoords[1] - 1;
+    if (neighbourCoords[INDEX_UP][1] != -1)
+	MPI_Cart_rank(gridComm, neighbourCoords[INDEX_UP], &neighbourRanks[INDEX_UP]);
+    
+    neighbourCoords[INDEX_RIGHT][0] = myCoords[0] + 1; 
+    neighbourCoords[INDEX_RIGHT][1] = myCoords[1];
+    if (neighbourCoords[INDEX_RIGHT][0] != dims[0])
+	MPI_Cart_rank(gridComm, neighbourCoords[INDEX_RIGHT], &neighbourRanks[INDEX_RIGHT]);
+
+    neighbourCoords[INDEX_DOWN][0] = myCoords[0]; 
+    neighbourCoords[INDEX_DOWN][1] = myCoords[1] + 1;
+    if (neighbourCoords[INDEX_DOWN][1] != dims[1])
+	MPI_Cart_rank(gridComm, neighbourCoords[INDEX_DOWN], &neighbourRanks[INDEX_DOWN]);
+
+    neighbourCoords[INDEX_LEFT][0] = myCoords[0] - 1; 
+    neighbourCoords[INDEX_LEFT][1] = myCoords[1];
+    if (neighbourCoords[INDEX_LEFT][0] != -1)
+	MPI_Cart_rank(gridComm, neighbourCoords[INDEX_LEFT], &neighbourRanks[INDEX_LEFT]);
 }
