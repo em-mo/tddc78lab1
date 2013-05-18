@@ -1,6 +1,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <mpi.h>
 #include <list>
 #include <vector>
@@ -23,13 +24,13 @@ using namespace std;
 void doCommunication(vector<pcord_t> *neighbourTransferData, const int *neighbourRank, list<pcord_t> *particles);
 void initializeNeighbours(int neighbourCoords[][2], int *neighbourRanks, int *myCoords, int *dims);
 void initializeBounds(const int *myCoords, const int *dims, cord_t *bounds);
-void initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *particles);
+double initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *particles);
 void changeLists(list<pcord_t> *origin, const cord_t bounds, vector<pcord_t> *neighbourTransferData, int *neighbourRanks);
 void resetLists(list<pcord_t> *particles, list<pcord_t> *collidedParticles, vector<pcord_t> *neighbourTransferData);
-float randFloat();
+double randdouble();
 void cleanUp(list<pcord_t> *particles);
 void printParticles(list<pcord_t> *particles);
-inline float calculatePreassure(float preassure);
+inline double calculatePressure(double pressure);
 
 
 MPI_Datatype MPI_PCORD;
@@ -82,7 +83,7 @@ int main(int argc, char **argv)
     //Initialize Cartesian Coordinates
     MPI_Dims_create(numberProc, 2, dims);
 
-    MPI_Type_contiguous(PCORD_SIZE, MPI_FLOAT, &MPI_PCORD);
+    MPI_Type_contiguous(PCORD_SIZE, MPI_DOUBLE, &MPI_PCORD);
     MPI_Type_commit(&MPI_PCORD);
 
     // if (myId == 0)
@@ -91,44 +92,47 @@ int main(int argc, char **argv)
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, reorder, &gridComm);
     MPI_Cart_coords(gridComm, myId, 2, myCoords);
 
+    double meanVelocity;
 
     initializeNeighbours(neighbourCoords, neighbourRanks, myCoords, dims);
     initializeBounds(myCoords, dims, &bounds);
-    initializeParticles(myId, bounds, &particles);
+    meanVelocity = initializeParticles(myId, bounds, &particles);
+    
     if (myId == 0)
         printf("Initialization complete, beginning stepping\n");
     fflush(stdout);
 
     int t;
-    float preassure = 0;
+    double pressure = 0;
     while (currentTimeStep < MAX_STEPS)
     {
         int loopCount = 0;
-        float tmpPreassure;
+        double tmpPressure;
         for (list<pcord_t>::iterator iter = particles.begin(); iter != particles.end(); ++iter)
         {
-            pcord_t p1 = *iter;
-            tmpPreassure = 0;
+            pcord_t *p1 = &(*iter);
+            tmpPressure = 0;
 
-            tmpPreassure = wall_collide(&p1, wall);
-
+            tmpPressure = wall_collide(p1, wall);
+            // if (myId == 0)
+            //     printf("Pressure: %f\n", tmpPressure);
             // if (myId == 0)
             //     printf("particle %d x %f y %f vx %f vy %f\n", ++loopCount, p1->x, p1->y, p1->vx, p1->vy);
 
-            preassure += tmpPreassure;
+            pressure += tmpPressure;
 
             // Check for particle collisions
-            if (tmpPreassure == 0)
+            if (tmpPressure == 0)
             {
                 list<pcord_t>::iterator iter2 = iter;
                 for (iter2++; iter2 != particles.end(); ++iter2)
                 {
-                    pcord_t p2 = *iter2;
+                    pcord_t *p2 = &(*iter2);
 
-                    t = collide(&p1, &p2);
+                    t = collide(p1, p2);
                     if (t != -1)
                     {
-                        interact(&p1, &p2, t);
+                        interact(p1, p2, t);
                         collidedParticles.push_back(*iter);
                         collidedParticles.push_back(*iter2);
                         iter = particles.erase(iter);
@@ -140,7 +144,7 @@ int main(int argc, char **argv)
             }
             else //collided with wall
             {
-                preassure += tmpPreassure;
+                pressure += tmpPressure;
                 collidedParticles.push_back(*iter);
                 iter = particles.erase(iter);
                 --iter;
@@ -167,14 +171,11 @@ int main(int argc, char **argv)
     if (myId == 0)
         printf("Steps complete\n");
 
-    float totalPreassure;
-    MPI_Reduce(&preassure, &totalPreassure, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+    double totalPressure;
+    MPI_Reduce(&pressure, &totalPressure, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-    printf("Wall preassure is %f\n", totalPreassure);
-
-    resetLists(&particles, &collidedParticles, neighbourTransferData);
-    printf("ID %d has %u particles\n", myId, (unsigned int)particles.size());
-
+    if (myId == 0)
+        printf("Wall pressure is %f with mean velocity %f\n", calculatePressure(totalPressure), meanVelocity);
     //cleanUp(&particles);
 
     MPI_Type_free(&MPI_PCORD);
@@ -245,8 +246,11 @@ void initializeBounds(const int *myCoords, const int *dims, cord_t *bounds)
     bounds->y1 = (myCoords[1] + 1) * (BOX_VERT_SIZE / dims[1]);
 }
 
-void  initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *particles)
+double initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *particles)
 {
+    double meanVelocityX = 0;
+    double meanVelocityY = 0;
+
     int amount = INIT_NO_PARTICLES + 1;
     pcord_t particle;
     srand(time(NULL) * (myId + 1));
@@ -255,19 +259,27 @@ void  initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *pa
     int boundsHeight = bounds.y1 - bounds.y0;
     while (--amount)
     {
-        particle.x = randFloat() * boundsWidth + bounds.x0;
-        particle.y = randFloat() * boundsHeight + bounds.y0;
+        particle.x = randdouble() * boundsWidth + bounds.x0;
+        particle.y = randdouble() * boundsHeight + bounds.y0;
 
-        particle.vx = 2 * randFloat() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
-        particle.vy = 2 * randFloat() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
+        particle.vx = 2 * randdouble() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
+        particle.vy = 2 * randdouble() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
+
+        meanVelocityX += fabs(particle.vx);
+        meanVelocityY += fabs(particle.vy);
 
         particles->push_back(particle);
     }
+
+    meanVelocityX /= INIT_NO_PARTICLES;
+    meanVelocityY /= INIT_NO_PARTICLES;
+
+    return sqrtf(meanVelocityX * meanVelocityX + meanVelocityY * meanVelocityY);
 }
 
-float randFloat()
+double randdouble()
 {
-    return (float)rand() / (float)RAND_MAX;
+    return (double)rand() / (double)RAND_MAX;
 }
 
 void changeLists(list<pcord_t> *origin, const cord_t bounds, vector<pcord_t> *neighbourTransferData, int *neighbourRanks)
@@ -351,7 +363,7 @@ void printParticles(list<pcord_t> *particles)
     }
 }
 
-inline float calculatePreassure(float preassure)
+inline double calculatePressure(double pressure)
 {
-    return preassure / (WALL_LENGTH * MAX_STEPS);
+    return pressure / (WALL_LENGTH * MAX_STEPS);
 }
