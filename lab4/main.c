@@ -18,16 +18,19 @@ using namespace std;
 
 #define PCORD_SIZE 4
 
-#define MAX_STEPS 10
+#define MAX_STEPS 100
 
-void doCommunication(vector<pcord_t> *neighbours, const int *neighbourRank, list<pcord_t *> *particles);
+void doCommunication(vector<pcord_t> *neighbourTransferData, const int *neighbourRank, list<pcord_t> *particles);
 void initializeNeighbours(int neighbourCoords[][2], int *neighbourRanks, int *myCoords, int *dims);
 void initializeBounds(const int *myCoords, const int *dims, cord_t *bounds);
-void initializeParticles(const int myId, const cord_t bounds, list<pcord_t *> *particles);
-void changeLists(list<pcord_t *> *origin, const cord_t bounds, vector<pcord_t> *neighbours, int *neighbourRanks);
-void resetLists(list<pcord_t *> *particles, list<pcord_t *> *collidedParticles, vector<pcord_t> *neighbours);
+void initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *particles);
+void changeLists(list<pcord_t> *origin, const cord_t bounds, vector<pcord_t> *neighbourTransferData, int *neighbourRanks);
+void resetLists(list<pcord_t> *particles, list<pcord_t> *collidedParticles, vector<pcord_t> *neighbourTransferData);
 float randFloat();
-void cleanUp(list<pcord_t *> *origin);
+void cleanUp(list<pcord_t> *particles);
+void printParticles(list<pcord_t> *particles);
+inline float calculatePreassure(float preassure);
+
 
 MPI_Datatype MPI_PCORD;
 MPI_Comm gridComm;
@@ -61,9 +64,9 @@ int main(int argc, char **argv)
 
     int neighbourCoords[4][2];
     int neighbourRanks[4];
-    vector<pcord_t> neighbours[4];
-    list<pcord_t *> particles;
-    list<pcord_t *> collidedParticles;
+    vector<pcord_t> neighbourTransferData[4];
+    list<pcord_t> particles;
+    list<pcord_t> collidedParticles;
 
     dims[0] = 0;
     dims[1] = 0;
@@ -92,38 +95,40 @@ int main(int argc, char **argv)
     initializeNeighbours(neighbourCoords, neighbourRanks, myCoords, dims);
     initializeBounds(myCoords, dims, &bounds);
     initializeParticles(myId, bounds, &particles);
-
     if (myId == 0)
         printf("Initialization complete, beginning stepping\n");
     fflush(stdout);
+
     int t;
     float preassure = 0;
     while (currentTimeStep < MAX_STEPS)
     {
         int loopCount = 0;
         float tmpPreassure;
-        for (list<pcord_t *>::iterator iter = particles.begin(); iter != particles.end(); ++iter)
+        for (list<pcord_t>::iterator iter = particles.begin(); iter != particles.end(); ++iter)
         {
-            pcord_t *p1 = *iter;
+            pcord_t p1 = *iter;
             tmpPreassure = 0;
 
-            tmpPreassure = wall_collide(p1, wall);
+            tmpPreassure = wall_collide(&p1, wall);
+
             // if (myId == 0)
-            //     printf("particle %d x %f y %f vx %f yx %f\n", ++loopCount, p1->x, p1->y, p1->vx, p1->vy);
+            //     printf("particle %d x %f y %f vx %f vy %f\n", ++loopCount, p1->x, p1->y, p1->vx, p1->vy);
+
             preassure += tmpPreassure;
 
-            //Check for particle collisions
+            // Check for particle collisions
             if (tmpPreassure == 0)
             {
-                list<pcord_t *>::iterator iter2 = iter;
+                list<pcord_t>::iterator iter2 = iter;
                 for (iter2++; iter2 != particles.end(); ++iter2)
                 {
-                    pcord_t *p2 = *iter2;
+                    pcord_t p2 = *iter2;
 
-                    t = collide(p1, p2);
+                    t = collide(&p1, &p2);
                     if (t != -1)
                     {
-                        interact(p1, p2, t);
+                        interact(&p1, &p2, t);
                         collidedParticles.push_back(*iter);
                         collidedParticles.push_back(*iter2);
                         iter = particles.erase(iter);
@@ -142,28 +147,32 @@ int main(int argc, char **argv)
             }
         }
 
-        for (list<pcord_t *>::iterator iter = particles.begin(); iter != particles.end(); ++iter)
+        for (list<pcord_t>::iterator it = particles.begin(); it != particles.end(); ++it)
         {
-            feuler(*iter, STEP_SIZE);
+            feuler(&(*it), STEP_SIZE);
         }
-
         //Move particles to neighbour lists that should be moved to new porocess.
-        changeLists(&particles, bounds, neighbours, neighbourRanks);
-        changeLists(&collidedParticles, bounds, neighbours, neighbourRanks);
+        changeLists(&particles, bounds, neighbourTransferData, neighbourRanks);
+        changeLists(&collidedParticles, bounds, neighbourTransferData, neighbourRanks);
 
         // COMMUNICATION
-        doCommunication(neighbours, neighbourRanks, &particles);
+        doCommunication(neighbourTransferData, neighbourRanks, &particles);
 
         //RESET LISTS
-        resetLists(&particles, &collidedParticles, neighbours);
+        resetLists(&particles, &collidedParticles, neighbourTransferData);
 
         currentTimeStep += STEP_SIZE;
     }
+
     if (myId == 0)
         printf("Steps complete\n");
 
-    resetLists(&particles, &collidedParticles, neighbours);
+    float totalPreassure;
+    MPI_Reduce(&preassure, &totalPreassure, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
+    printf("Wall preassure is %f\n", totalPreassure);
+
+    resetLists(&particles, &collidedParticles, neighbourTransferData);
     printf("ID %d has %u particles\n", myId, (unsigned int)particles.size());
 
     //cleanUp(&particles);
@@ -172,21 +181,21 @@ int main(int argc, char **argv)
     MPI_Finalize();
 }
 
-void doCommunication(vector<pcord_t> *neighbours, const int *neighbourRank, list<pcord_t *> *particles)
+void doCommunication(vector<pcord_t> *neighbourTransferData, const int *neighbourRank, list<pcord_t> *particles)
 {
     MPI_Request request;
 
-    //for all neighbours
+    //for all neighbour SEND
     for (int index = 0; index < 4; ++index)
     {
         if (neighbourRank[index] != -1)
         {
-            int sendAmount = neighbours[index].size();
+            int sendAmount = neighbourTransferData[index].size();
             MPI_Isend(&sendAmount, 1, MPI_INT, neighbourRank[index], TAG_AMOUNT, MPI_COMM_WORLD, &request);
             if (sendAmount != 0) 
             {
                 // printf("Id %d, send %d to index %d\n", myId, sendAmount, neighbourRank[index]);
-                MPI_Isend(&neighbours[index].front(), sendAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &request);
+                MPI_Isend(&(neighbourTransferData[index].front()), sendAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &request);
             }
         }
     }
@@ -206,7 +215,7 @@ void doCommunication(vector<pcord_t> *neighbours, const int *neighbourRank, list
                 MPI_Recv(recvBuffer, recvAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &status);
                 for (int i = 0; i < recvAmount; i++)
                 {
-                    particles->push_back(&recvBuffer[i]);
+                    particles->push_back(recvBuffer[i]);
                 }
             }
         }
@@ -214,7 +223,7 @@ void doCommunication(vector<pcord_t> *neighbours, const int *neighbourRank, list
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void resetLists(list<pcord_t *> *particles, list<pcord_t *> *collidedParticles, vector<pcord_t> *neighbours)
+void resetLists(list<pcord_t> *particles, list<pcord_t> *collidedParticles, vector<pcord_t> *neighbourTransferData)
 {
     while (!collidedParticles->empty())
     {
@@ -224,7 +233,7 @@ void resetLists(list<pcord_t *> *particles, list<pcord_t *> *collidedParticles, 
 
     for (int index = 0; index < 4; ++index)
     {
-        neighbours[index].clear();
+        neighbourTransferData[index].clear();
     }
 }
 
@@ -236,22 +245,21 @@ void initializeBounds(const int *myCoords, const int *dims, cord_t *bounds)
     bounds->y1 = (myCoords[1] + 1) * (BOX_VERT_SIZE / dims[1]);
 }
 
-void  initializeParticles(const int myId, const cord_t bounds, list<pcord_t *> *particles)
+void  initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *particles)
 {
     int amount = INIT_NO_PARTICLES + 1;
-    pcord_t *particle;
+    pcord_t particle;
     srand(time(NULL) * (myId + 1));
 
     int boundsWidth = bounds.x1 - bounds.x0;
     int boundsHeight = bounds.y1 - bounds.y0;
     while (--amount)
     {
-        particle = (pcord_t *) malloc(sizeof(pcord_t));
-        particle->x = randFloat() * boundsWidth + bounds.x0;
-        particle->y = randFloat() * boundsHeight + bounds.y0;
+        particle.x = randFloat() * boundsWidth + bounds.x0;
+        particle.y = randFloat() * boundsHeight + bounds.y0;
 
-        particle->vx = 2 * randFloat() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
-        particle->vy = 2 * randFloat() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
+        particle.vx = 2 * randFloat() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
+        particle.vy = 2 * randFloat() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
 
         particles->push_back(particle);
     }
@@ -262,34 +270,34 @@ float randFloat()
     return (float)rand() / (float)RAND_MAX;
 }
 
-void changeLists(list<pcord_t *> *origin, const cord_t bounds, vector<pcord_t> *neighbours, int *neighbourRanks)
+void changeLists(list<pcord_t> *origin, const cord_t bounds, vector<pcord_t> *neighbourTransferData, int *neighbourRanks)
 {
-    pcord_t *particle;
-    for (list<pcord_t *>::iterator iter = origin->begin(); iter != origin->end();)
+    pcord_t particle;
+    for (list<pcord_t>::iterator iter = origin->begin(); iter != origin->end();)
     {
         particle = *iter;
-        if (particle->x < bounds.x0 && neighbourRanks[INDEX_LEFT] != -1)
+        if (particle.x < bounds.x0 && neighbourRanks[INDEX_LEFT] != -1)
         {
-            neighbours[INDEX_LEFT].push_back(*particle);
-            //free(particle);
+            neighbourTransferData[INDEX_LEFT].push_back(particle);
+            // free(particle);
             iter = origin->erase(iter);
         }
-        else if (particle->x > bounds.x1 && neighbourRanks[INDEX_RIGHT] != -1)
+        else if (particle.x > bounds.x1 && neighbourRanks[INDEX_RIGHT] != -1)
         {
-            neighbours[INDEX_RIGHT].push_back(*particle);
-            //free(particle);
+            neighbourTransferData[INDEX_RIGHT].push_back(particle);
+            // free(particle);
             iter = origin->erase(iter);
         }
-        else if (particle->y < bounds.y0 && neighbourRanks[INDEX_UP] != -1)
+        else if (particle.y < bounds.y0 && neighbourRanks[INDEX_UP] != -1)
         {
-            neighbours[INDEX_UP].push_back(*particle);
-            //free(particle);
+            neighbourTransferData[INDEX_UP].push_back(particle);
+            // free(particle);
             iter = origin->erase(iter);
         }
-        else if (particle->y > bounds.y1 && neighbourRanks[INDEX_DOWN] != -1)
+        else if (particle.y > bounds.y1 && neighbourRanks[INDEX_DOWN] != -1)
         {
-            neighbours[INDEX_DOWN].push_back(*particle);
-            //free(particle);
+            neighbourTransferData[INDEX_DOWN].push_back(particle);
+            // free(particle);
             iter = origin->erase(iter);
         }
         else
@@ -327,10 +335,23 @@ void initializeNeighbours(int neighbourCoords[][2], int *neighbourRanks, int *my
         MPI_Cart_rank(gridComm, neighbourCoords[INDEX_LEFT], &neighbourRanks[INDEX_LEFT]);
 }
 
-void cleanUp(list<pcord_t *> *particles)
+void cleanUp(list<pcord_t> *particles)
 {
-    for (list<pcord_t *>::iterator iter = particles->begin(); iter != particles->end(); ++iter)
+    for (list<pcord_t>::iterator iter = particles->begin(); iter != particles->end(); ++iter)
     {
-        free(*iter);
+        // free(*iter);
     }
+}
+
+void printParticles(list<pcord_t> *particles) 
+{
+    for (list<pcord_t>::iterator iter = particles->begin(); iter != particles->end(); ++iter)
+    {
+        printf("ID %d particle x %f y %f vx %f vy %f\n", myId, iter->x, iter->y, iter->vx, iter->vy);
+    }
+}
+
+inline float calculatePreassure(float preassure)
+{
+    return preassure / (WALL_LENGTH * MAX_STEPS);
 }
