@@ -37,6 +37,7 @@ inline void safeIterDecrement(list<pcord_t>::iterator *iter, list<pcord_t> *iter
 MPI_Datatype MPI_PCORD;
 MPI_Comm gridComm;
 int myId, numberProc;
+int numberOfParticles, maxInitialVelocity, wallSideLengthX, wallSideLengthY;
 
 int main(int argc, char **argv)
 {
@@ -46,6 +47,24 @@ int main(int argc, char **argv)
 
     myCoords[0] = 0;
     myCoords[1] = 0;
+
+    numberOfParticles = INIT_NO_PARTICLES;
+    maxInitialVelocity = MAX_INITIAL_VELOCITY;
+    wallSideLengthX = BOX_HORIZ_SIZE;
+    wallSideLengthY = BOX_VERT_SIZE;
+
+    switch(argc)
+    {
+        case 4:
+            wallSideLengthX = wallSideLengthY = atoi(argv[3]);
+        case 3:
+            maxInitialVelocity = atoi(argv[2]);
+        case 2:
+            numberOfParticles = atoi(argv[1]);
+        default:
+            printf("Particles %d  Max initial velocity %d  Wall length %d\n", numberOfParticles, maxInitialVelocity, wallSideLengthX);
+            
+    }
 
 
     //Cartesian Coordinates
@@ -61,8 +80,8 @@ int main(int argc, char **argv)
 
     wall.x0 = 0;
     wall.y0 = 0;
-    wall.x1 = BOX_HORIZ_SIZE;
-    wall.y1 = BOX_VERT_SIZE;
+    wall.x1 = wallSideLengthX;
+    wall.y1 = wallSideLengthY;
 
     int neighbourCoords[4][2];
     int neighbourRanks[4];
@@ -244,10 +263,10 @@ void resetLists(list<pcord_t> *particles, list<pcord_t> *collidedParticles, vect
 
 void initializeBounds(const int *myCoords, const int *dims, cord_t *bounds)
 {
-    bounds->x0 = myCoords[0] * (BOX_HORIZ_SIZE / dims[0]);
-    bounds->x1 = (myCoords[0] + 1) * (BOX_HORIZ_SIZE / dims[0]);
-    bounds->y0 = myCoords[1] * (BOX_VERT_SIZE / dims[1]);
-    bounds->y1 = (myCoords[1] + 1) * (BOX_VERT_SIZE / dims[1]);
+    bounds->x0 = myCoords[0] * (wallSideLengthX / dims[0]);
+    bounds->x1 = (myCoords[0] + 1) * (wallSideLengthX / dims[0]);
+    bounds->y0 = myCoords[1] * (wallSideLengthY / dims[1]);
+    bounds->y1 = (myCoords[1] + 1) * (wallSideLengthY / dims[1]);
 }
 
 double initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *particles)
@@ -255,7 +274,7 @@ double initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *p
     double meanVelocityX = 0;
     double meanVelocityY = 0;
 
-    int amount = INIT_NO_PARTICLES + 1;
+    int amount = numberOfParticles + 1;
     pcord_t particle;
     srand(time(NULL) * (myId + 1));
 
@@ -270,7 +289,7 @@ double initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *p
         particle.y = randdouble() * boundsHeight + bounds.y0;
 
 
-        r = randdouble() * MAX_INITIAL_VELOCITY;
+        r = randdouble() * maxInitialVelocity;
 		angle = randdouble() * 2 * PI;
 		particle.vx = r * cos(angle);
 		particle.vy = r * sin(angle);
@@ -281,7 +300,7 @@ double initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *p
         particles->push_back(particle);
 	}
 
-	return sqrtf(meanVelocityX * meanVelocityX + meanVelocityY * meanVelocityY) / INIT_NO_PARTICLES;
+	return sqrtf(meanVelocityX * meanVelocityX + meanVelocityY * meanVelocityY) / numberOfParticles;
 }
 
 double randdouble()
