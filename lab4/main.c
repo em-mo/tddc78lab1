@@ -31,6 +31,7 @@ double randdouble();
 void cleanUp(list<pcord_t> *particles);
 void printParticles(list<pcord_t> *particles);
 inline double calculatePressure(double pressure);
+inline void safeIterDecrement(list<pcord_t>::iterator *iter, list<pcord_t> *iterList);
 
 
 MPI_Datatype MPI_PCORD;
@@ -102,30 +103,26 @@ int main(int argc, char **argv)
         printf("Initialization complete, beginning stepping\n");
     fflush(stdout);
 
-    int t;
+    double t;
     double pressure = 0;
+    double tmpPressure;
+    bool hasCollided = false;
     while (currentTimeStep < MAX_STEPS)
     {
-        int loopCount = 0;
-        double tmpPressure;
-        for (list<pcord_t>::iterator iter = particles.begin(); iter != particles.end(); ++iter)
+        for (list<pcord_t>::iterator iter = particles.begin(); iter != particles.end();)
         {
             pcord_t *p1 = &(*iter);
             tmpPressure = 0;
 
             tmpPressure = wall_collide(p1, wall);
-            // if (myId == 0)
-            //     printf("Pressure: %f\n", tmpPressure);
-            // if (myId == 0)
-            //     printf("particle %d x %f y %f vx %f vy %f\n", ++loopCount, p1->x, p1->y, p1->vx, p1->vy);
 
             pressure += tmpPressure;
 
             // Check for particle collisions
             if (tmpPressure == 0)
             {
-                list<pcord_t>::iterator iter2 = iter;
-                for (iter2++; iter2 != particles.end(); ++iter2)
+                list<pcord_t>::iterator iter2(iter);
+                for (++iter2; iter2 != particles.end(); ++iter2)
                 {
                     pcord_t *p2 = &(*iter2);
 
@@ -135,9 +132,9 @@ int main(int argc, char **argv)
                         interact(p1, p2, t);
                         collidedParticles.push_back(*iter);
                         collidedParticles.push_back(*iter2);
-                        iter = particles.erase(iter);
                         particles.erase(iter2);
-                        --iter;
+                        iter = particles.erase(iter);
+                        hasCollided = true;
                         break;
                     }
                 }
@@ -147,8 +144,15 @@ int main(int argc, char **argv)
                 pressure += tmpPressure;
                 collidedParticles.push_back(*iter);
                 iter = particles.erase(iter);
-                --iter;
+                hasCollided = true;
             }
+
+            if (hasCollided)
+                hasCollided = false;
+            else
+                ++iter;
+            
+
         }
 
         for (list<pcord_t>::iterator it = particles.begin(); it != particles.end(); ++it)
@@ -366,4 +370,10 @@ void printParticles(list<pcord_t> *particles)
 inline double calculatePressure(double pressure)
 {
     return pressure / (WALL_LENGTH * MAX_STEPS);
+}
+
+inline void safeIterDecrement(list<pcord_t>::iterator *iter, list<pcord_t> *iterList)
+{
+    if (*iter != iterList->begin())
+        --(*iter);
 }
