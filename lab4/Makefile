@@ -2,13 +2,15 @@ CFLAGS = -Nmpi -fast
 
 LFLAGS = -lpthread -lrt -lm -Nmpi
 
+CC = icc
+
 all: particle
 
 clean:
 	-$(RM) *.o particle
 
 particle: main.o physics.o
-	cc -o $@ $(CFLAGS) main.o physics.o $(LFLAGS)
+	icc -o $@ $(CFLAGS) main.o physics.o $(LFLAGS)
 
 touch:
 	touch main.c
