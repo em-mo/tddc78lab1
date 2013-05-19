@@ -38,6 +38,7 @@ MPI_Datatype MPI_PCORD;
 MPI_Comm gridComm;
 int myId, numberProc;
 int numberOfParticles, maxInitialVelocity, wallSideLengthX, wallSideLengthY;
+double startTime, endTime;
 
 int main(int argc, char **argv)
 {
@@ -62,10 +63,8 @@ int main(int argc, char **argv)
         case 2:
             numberOfParticles = atoi(argv[1]);
         default:
-            printf("Particles %d  Max initial velocity %d  Wall length %d\n", numberOfParticles, maxInitialVelocity, wallSideLengthX);
-            
+            break;
     }
-
 
     //Cartesian Coordinates
     int dims[2];
@@ -114,13 +113,17 @@ int main(int argc, char **argv)
 
     double meanVelocity;
 
+    startTime = MPI_Wtime();
+
     initializeNeighbours(neighbourCoords, neighbourRanks, myCoords, dims);
     initializeBounds(myCoords, dims, &bounds);
     meanVelocity = initializeParticles(myId, bounds, &particles);
     
-    if (myId == 0)
+    if(myId == 0)
+    {
+        printf("Particles %d  Max initial velocity %d  Wall length %d\n", numberOfParticles, maxInitialVelocity, wallSideLengthX);
         printf("Initialization complete, beginning stepping\n");
-    fflush(stdout);
+    }
 
     double t;
     double pressure = 0;
@@ -197,8 +200,10 @@ int main(int argc, char **argv)
     double totalPressure;
     MPI_Reduce(&pressure, &totalPressure, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
+    endTime = MPI_Wtime();
+
     if (myId == 0)
-        printf("Wall pressure is %f with mean velocity %f\n", calculatePressure(totalPressure), meanVelocity);
+        printf("Wall pressure is %f with mean velocity %f in %f seconds\n", calculatePressure(totalPressure), meanVelocity, endTime - startTime);
     //cleanUp(&particles);
 
     MPI_Type_free(&MPI_PCORD);
@@ -391,7 +396,7 @@ void printParticles(list<pcord_t> *particles)
 
 inline double calculatePressure(double pressure)
 {
-    return pressure / (WALL_LENGTH * MAX_STEPS);
+    return pressure / ((wallSideLengthX * 2 + wallSideLengthY * 2) * MAX_STEPS);
 }
 
 inline void safeIterDecrement(list<pcord_t>::iterator *iter, list<pcord_t> *iterList)

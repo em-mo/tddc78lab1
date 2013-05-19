@@ -13,7 +13,7 @@ particle: main.o physics.o
 	icc -o $@ $(CFLAGS) main.o physics.o $(LFLAGS)
 
 touch:
-	touch main.c
+	touch main.cpp
 
 arc:
-	tar cf - *.c *.h Makefile Makefile.sgi|gzip - > particle.tar.gz
+	tar cf - *.cpp *.h Makefile Makefile.sgi|gzip - > particle.tar.gz
