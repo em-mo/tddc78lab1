@@ -261,24 +261,27 @@ double initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *p
 
     int boundsWidth = bounds.x1 - bounds.x0;
     int boundsHeight = bounds.y1 - bounds.y0;
+	double r;
+	double angle;
+
     while (--amount)
     {
         particle.x = randdouble() * boundsWidth + bounds.x0;
         particle.y = randdouble() * boundsHeight + bounds.y0;
 
-        particle.vx = 2 * randdouble() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
-        particle.vy = 2 * randdouble() * MAX_INITIAL_VELOCITY - MAX_INITIAL_VELOCITY;
+
+        r = randdouble() * MAX_INITIAL_VELOCITY;
+		angle = randdouble() * 2 * PI;
+		particle.vx = r * cos(angle);
+		particle.vy = r * sin(angle);
 
         meanVelocityX += fabs(particle.vx);
         meanVelocityY += fabs(particle.vy);
 
         particles->push_back(particle);
-    }
+	}
 
-    meanVelocityX /= INIT_NO_PARTICLES;
-    meanVelocityY /= INIT_NO_PARTICLES;
-
-    return sqrtf(meanVelocityX * meanVelocityX + meanVelocityY * meanVelocityY);
+	return sqrtf(meanVelocityX * meanVelocityX + meanVelocityY * meanVelocityY) / INIT_NO_PARTICLES;
 }
 
 double randdouble()
