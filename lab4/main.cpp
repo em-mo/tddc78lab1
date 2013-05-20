@@ -121,8 +121,7 @@ int main(int argc, char **argv)
     
     if(myId == 0)
     {
-        printf("Dims %d %d\n", dims[0], dims[1]);
-        printf("Particles %d  Max initial velocity %d  Wall length %d\n", numberOfParticles, maxInitialVelocity, wallSideLengthX);
+        printf("Particles %d  Max initial velocity %d  Wall length %d  Processes %d\n", numberOfParticles, maxInitialVelocity, wallSideLengthX, numberProc);
         printf("Initialization complete, beginning stepping\n");
     }
 
@@ -201,15 +200,16 @@ int main(int argc, char **argv)
 
     endTime = MPI_Wtime();
 
-    int area;
+    int area, totalParticles;
 
     double rt;
 
     if (myId == 0)
     {
+        totalParticles = (numberOfParticles * numberProc);
         pressure = calculatePressure(totalPressure);
-        rt = pressure * (wallSideLengthX * wallSideLengthY) / (numberOfParticles * numberProc);
-        printf("Wall pressure is %f with RT %f in %f seconds\n", calculatePressure(totalPressure), rt, endTime - startTime);
+        rt = pressure * (wallSideLengthX * wallSideLengthY) / totalParticles;
+        printf("Procs %d Parts %d p %f RT %f in %f s\n", numberProc, totalParticles, pressure, rt, endTime - startTime);
     }
     MPI_Type_free(&MPI_PCORD);
     MPI_Finalize();
