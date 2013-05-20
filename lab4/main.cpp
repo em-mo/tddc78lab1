@@ -1,8 +1,8 @@
+#include <mpi.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include <mpi.h>
 #include <list>
 #include <vector>
 #include "definitions.h"

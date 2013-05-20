@@ -1,8 +1,10 @@
-CFLAGS = -Nmpi -fast
+CFLAGS = -Nmpi -O2
+CXXFLAGS = -Nmpi -O2
 
 LFLAGS = -lpthread -lrt -lm -Nmpi
 
 CC = icc
+CXX = icpc
 
 all: particle
 
