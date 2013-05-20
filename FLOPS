@@ -1,0 +1,16 @@
+FLOPS
+BLUR
+2
+	y*x
+		9
+		radius*8
+
+2 * (numpix * (9 + radius * 8))
+
+THRESH
+numpix
+	3
+numpix
+	2
+
+numpix * 5
