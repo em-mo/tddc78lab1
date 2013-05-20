@@ -12,7 +12,7 @@ clean:
 	-$(RM) *.o particle
 
 particle: main.o physics.o
-	icc -o $@ $(CFLAGS) main.o physics.o $(LFLAGS)
+	icpc -o $@ $(CFLAGS) main.o physics.o $(LFLAGS)
 
 touch:
 	touch main.cpp
