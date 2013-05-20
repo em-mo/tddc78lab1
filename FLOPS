@@ -5,7 +5,7 @@ BLUR
 		9
 		radius*8
 
-2 * (numpix * (9 + radius * 8))
+2 * (numpix * 18 + numpix * (radius * 28))
 
 THRESH
 numpix
