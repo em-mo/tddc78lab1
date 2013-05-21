@@ -1,0 +1,21 @@
+CFLAGS = -Nmpi -O2 -tcollect -I$(VT_ROOT)/include
+CXXFLAGS = -Nmpi -O2 -tcollect -I$(VT_ROOT)/include
+
+LFLAGS = -lpthread -lrt -lm -Nmpi -L$(VT_LIB_DIR) -lVT $(VT_ADD_LIBS)
+
+CC = icc
+CXX = icpc
+
+all: particleitac
+
+clean:
+	-$(RM) *.o particle
+
+particleitac: main.o physics.o
+	icpc -o $@ $(CXXFLAGS) main.o physics.o $(LFLAGS)
+
+touch:
+	touch main.cpp
+
+arc:
+	tar cf - *.cpp *.h Makefile Makefile.sgi|gzip - > particle.tar.gz
