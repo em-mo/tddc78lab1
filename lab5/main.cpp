@@ -20,7 +20,7 @@ using namespace std;
 
 #define PCORD_SIZE 4
 
-#define MAX_STEPS 100
+#define MAX_STEPS 5
 
 void doCommunication(vector<pcord_t> *neighbourTransferData, const int *neighbourRank, list<pcord_t> *particles);
 void initializeNeighbours(int neighbourCoords[][2], int *neighbourRanks, int *myCoords, int *dims);
@@ -33,7 +33,9 @@ void cleanUp(list<pcord_t> *particles);
 void printParticles(list<pcord_t> *particles);
 inline double calculatePressure(double pressure);
 inline void safeIterDecrement(list<pcord_t>::iterator *iter, list<pcord_t> *iterList);
-
+bool particleCollision(pcord_t *p1, list<pcord_t>::iterator *iter, list<pcord_t>::iterator *iter2);
+void checkCollision(list<pcord_t>::iterator *iter);
+void moveParticles();
 
 MPI_Datatype MPI_PCORD;
 MPI_Comm gridComm;
@@ -42,35 +44,56 @@ int numberOfParticles, maxInitialVelocity, wallSideLengthX, wallSideLengthY;
 double startTime, endTime;
 
 
-char classname[] = "particles";
+char const *classname = "particles";
 int classhandle;
 
-char symbolInit[] = "Particle Initialization";
-char symbolComm[] = "Communication";
-char symbolAllSteps[] = "All steps";
-char symbolStep[] = "One step";
-char symbolParticleCollisionCheck = "Particle collision check"
+ char const *symbolInit = "Particle Initialization";
+ char const *symbolComm = "Communication";
+ char const *symbolAllSteps = "All steps";
+ char const *symbolCollision = "All Collision checks";
+ char const *symbolParticleCollisionCheck = "Particle collision check";
+ char const *symbolMove = "Move";
 
 int initStateHandle;
 int commStateHandle;
 int allStepsStateHandle;
-int stepStateHandle;
+int collisionStateHandle;
 int pCollisionCheckStateHandle;
+int moveStateHandle;
+
+char const *pressureCountName = "pressure";
+int pressureCounterHandle;
+
+double collideTime;
+
+double pressure = 0;
+double tmpPressure;
+bool hasCollided = false;
+
+cord_t wall;
+
+list<pcord_t> particles;
+list<pcord_t> collidedParticles;
 
 int main(int argc, char **argv)
 {
-    
+
+    //MPI
+    int ierr = MPI_Init(&argc, &argv);
 
     //TraceAnalyzer
     VT_classdef(classname, &classhandle);
     VT_funcdef (symbolInit, classhandle, &initStateHandle);
     VT_funcdef (symbolComm, classhandle, &commStateHandle);
     VT_funcdef (symbolAllSteps, classhandle, &allStepsStateHandle);
-    VT_funcdef (symbolstep, classhandle, &stepStateHandle);
+    VT_funcdef (symbolCollision, classhandle, &collisionStateHandle);
     VT_funcdef (symbolParticleCollisionCheck, classhandle, &pCollisionCheckStateHandle);
+    VT_funcdef (symbolMove, classhandle, &moveStateHandle);
 
-    //MPI
-    int ierr = MPI_Init(&argc, &argv);
+
+    double counterBounds[2] = {0,0};
+    VT_countdef(pressureCountName, classhandle, VT_COUNT_FLOAT, VT_ME, counterBounds, "Kgm/s", &pressureCounterHandle);
+
     int myCoords[2];
 
     myCoords[0] = 0;
@@ -102,7 +125,7 @@ int main(int argc, char **argv)
 
     int currentTimeStep = 0;
 
-    cord_t wall;
+    
 
     wall.x0 = 0;
     wall.y0 = 0;
@@ -112,8 +135,6 @@ int main(int argc, char **argv)
     int neighbourCoords[4][2];
     int neighbourRanks[4];
     vector<pcord_t> neighbourTransferData[4];
-    list<pcord_t> particles;
-    list<pcord_t> collidedParticles;
 
     dims[0] = 0;
     dims[1] = 0;
@@ -152,65 +173,24 @@ int main(int argc, char **argv)
         printf("Initialization complete, beginning stepping\n");
     }
 
-    double t;
-    double pressure = 0;
-    double tmpPressure;
-    bool hasCollided = false;
+   
 
-    VT_Begin(allStepsStateHandle);
     while (currentTimeStep < MAX_STEPS)
     {
-        VT_Begin(stepStateHandle);
         for (list<pcord_t>::iterator iter = particles.begin(); iter != particles.end();)
         {
-            pcord_t *p1 = &(*iter);
             tmpPressure = 0;
 
-            tmpPressure = wall_collide(p1, wall);
-
-            // Check for particle collisions
-            if (tmpPressure == 0)
-            {
-                list<pcord_t>::iterator iter2(iter);
-                VT_Begin(pCollisionCheckStateHandle);
-                for (++iter2; iter2 != particles.end(); ++iter2)
-                {
-                    pcord_t *p2 = &(*iter2);
-
-                    t = collide(p1, p2);
-                    if (t != -1)
-                    {
-                        interact(p1, p2, t);
-                        collidedParticles.push_back(*iter);
-                        collidedParticles.push_back(*iter2);
-                        particles.erase(iter2);
-                        iter = particles.erase(iter);
-                        hasCollided = true;
-                        break;
-                    }
-                }
-                VT_End(pCollisionCheckStateHandle);
-            }
-            else //collided with wall
-            {
-                pressure += tmpPressure;
-                collidedParticles.push_back(*iter);
-                iter = particles.erase(iter);
-                hasCollided = true;
-            }
-
+            checkCollision(&iter);
+            VT_countval(1, &pressureCounterHandle, &pressure);
             if (hasCollided)
                 hasCollided = false;
             else
                 ++iter;
-            
-
         }
 
-        for (list<pcord_t>::iterator it = particles.begin(); it != particles.end(); ++it)
-        {
-            feuler(&(*it), STEP_SIZE);
-        }
+        moveParticles();
+
         //Move particles to neighbour lists that should be moved to new porocess.
         changeLists(&particles, bounds, neighbourTransferData, neighbourRanks);
         changeLists(&collidedParticles, bounds, neighbourTransferData, neighbourRanks);
@@ -223,9 +203,8 @@ int main(int argc, char **argv)
 
         currentTimeStep += STEP_SIZE;
 
-        VT_End(stepStateHandle);
+
     }
-    VT_End(allStepsStateHandle);
 
     if (myId == 0)
         printf("Steps complete\n");
@@ -252,7 +231,7 @@ int main(int argc, char **argv)
 
 void doCommunication(vector<pcord_t> *neighbourTransferData, const int *neighbourRank, list<pcord_t> *particles)
 {
-    VT_Enter(commStateHandle, VT_NOSCL);
+    VT_enter(commStateHandle, VT_NOSCL);
 
     MPI_Request request;
 
@@ -293,7 +272,7 @@ void doCommunication(vector<pcord_t> *neighbourTransferData, const int *neighbou
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
-    VT_Leave(VT_NOSCL);
+    VT_leave(VT_NOSCL);
 }
 
 void resetLists(list<pcord_t> *particles, list<pcord_t> *collidedParticles, vector<pcord_t> *neighbourTransferData)
@@ -320,7 +299,7 @@ void initializeBounds(const int *myCoords, const int *dims, cord_t *bounds)
 
 double initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *particles)
 {
-    VT_Enter(initStateHandle, VT_NOSCL);
+    VT_enter(initStateHandle, VT_NOSCL);
 
     double meanVelocityX = 0;
     double meanVelocityY = 0;
@@ -351,7 +330,7 @@ double initializeParticles(const int myId, const cord_t bounds, list<pcord_t> *p
         particles->push_back(particle);
 	}
 
-    VT_Leave(VT_NOSCL);
+    VT_leave(VT_NOSCL);
 	return sqrtf(meanVelocityX * meanVelocityX + meanVelocityY * meanVelocityY) / numberOfParticles;
 }
 
@@ -450,4 +429,59 @@ inline void safeIterDecrement(list<pcord_t>::iterator *iter, list<pcord_t> *iter
 {
     if (*iter != iterList->begin())
         --(*iter);
+}
+
+bool particleCollision(pcord_t *p1, list<pcord_t>::iterator *iter, list<pcord_t>::iterator *iter2)
+{
+    VT_enter(pCollisionCheckStateHandle, VT_NOSCL);
+
+    pcord_t *p2 = &(**iter2);
+    collideTime = collide(p1, p2);
+    if (collideTime != -1)
+    {
+        interact(p1, p2, collideTime);
+        collidedParticles.push_back(**iter);
+        collidedParticles.push_back(**iter2);
+        particles.erase(*iter2);
+        *iter = particles.erase(*iter);
+        hasCollided = true;
+    }
+    VT_leave(VT_NOSCL);
+    return hasCollided;
+}
+
+void checkCollision(list<pcord_t>::iterator* iter)
+{
+    VT_enter(collisionStateHandle, VT_NOSCL);
+    pcord_t *p1 = &(**iter);
+    tmpPressure = wall_collide(p1, wall);
+
+    // Check for particle collisions
+    if (tmpPressure == 0)
+    {
+        list<pcord_t>::iterator iter2(*iter);
+        for (++iter2; iter2 != particles.end(); ++iter2)
+        {
+           if(particleCollision(p1, iter, &iter2))
+                break;
+        }
+    }
+    else //collided with wall
+    {
+        pressure += tmpPressure;
+        collidedParticles.push_back(**iter);
+        *iter = particles.erase(*iter);
+        hasCollided = true;
+    }
+    VT_leave(VT_NOSCL);
+}
+
+void moveParticles()
+{
+    VT_enter(moveStateHandle, VT_NOSCL);
+    for (list<pcord_t>::iterator it = particles.begin(); it != particles.end(); ++it)
+    {
+        feuler(&(*it), STEP_SIZE);
+    }
+    VT_leave(VT_NOSCL);
 }
