@@ -40,6 +40,9 @@ int myId, numberProc;
 int numberOfParticles, maxInitialVelocity, wallSideLengthX, wallSideLengthY;
 double startTime, endTime;
 
+int neighbourSentCount[4] = {0, 0, 0, 0};
+
+
 int main(int argc, char **argv)
 {
     //MPI
@@ -204,6 +207,14 @@ int main(int argc, char **argv)
 
     double rt;
 
+    for(int i = 0; i < 4; ++i)
+    {
+        if (neighbourRanks[i] != -1)
+        {
+            printf("Id %d target %d amount %d\n", myId, neighbourRanks[i], neighbourSentCount[i]);
+        }
+    }
+
     if (myId == 0)
     {
         totalParticles = (numberOfParticles * numberProc);
@@ -229,6 +240,7 @@ void doCommunication(vector<pcord_t> *neighbourTransferData, const int *neighbou
             if (sendAmount != 0) 
             {
                 // printf("Id %d, send %d to index %d\n", myId, sendAmount, neighbourRank[index]);
+                neighbourSentCount[index] += sendAmount;
                 MPI_Isend(&(neighbourTransferData[index].front()), sendAmount, MPI_PCORD, neighbourRank[index], TAG_SEND, MPI_COMM_WORLD, &request);
             }
         }
